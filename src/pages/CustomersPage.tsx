@@ -12,19 +12,24 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { useCustomers, useCreateCustomer, useUpdateCustomer, useDeleteCustomer } from "@/hooks/api/useCustomers";
-import type { Customer, CreateCustomerData, CustomerType } from "@/types/api.types";
+import type { Customer, CreateCustomerData } from "@/types/api.types";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 
+// Backend createCustomerSchema: name required, phone required (min 10)
 const customerSchema = z.object({
   name: z.string().min(1, "Name is required"),
+  customerType: z.enum(["RETAIL", "WHOLESALE", "DISTRIBUTOR"] as const).optional(),
+  phone: z.string().min(10, "Phone must be at least 10 digits"),
+  altPhone: z.string().optional(),
   email: z.string().email("Invalid email").optional().or(z.literal("")),
-  phone: z.string().optional(),
   address: z.string().optional(),
   city: z.string().optional(),
-  customerType: z.enum(["RETAIL", "WHOLESALE", "DISTRIBUTOR"] as const),
+  district: z.string().optional(),
+  paymentTermDays: z.coerce.number().min(0).optional(),
   creditLimit: z.coerce.number().min(0).optional(),
+  taxId: z.string().optional(),
   notes: z.string().optional(),
 });
 
@@ -51,7 +56,7 @@ const CustomersPage = () => {
 
   const openCreateDialog = () => {
     setEditingCustomer(null);
-    reset({ name: "", email: "", phone: "", address: "", city: "", customerType: "RETAIL", creditLimit: 0, notes: "" });
+    reset({ name: "", phone: "", altPhone: "", email: "", address: "", city: "", district: "", customerType: "RETAIL", creditLimit: 0, paymentTermDays: 30, taxId: "", notes: "" });
     setIsDialogOpen(true);
   };
 
@@ -59,33 +64,41 @@ const CustomersPage = () => {
     setEditingCustomer(customer);
     reset({
       name: customer.name,
-      email: customer.email || "",
       phone: customer.phone || "",
+      altPhone: customer.altPhone || "",
+      email: customer.email || "",
       address: customer.address || "",
       city: customer.city || "",
-      customerType: customer.customerType,
-      creditLimit: customer.creditLimit,
+      district: customer.district || "",
+      customerType: (customer.customerType as any) || "RETAIL",
+      creditLimit: customer.creditLimit ?? 0,
+      paymentTermDays: customer.paymentTermDays ?? 30,
+      taxId: customer.taxId || "",
       notes: customer.notes || "",
     });
     setIsDialogOpen(true);
   };
 
   const onSubmit = async (formData: CustomerFormData) => {
-    const data: CreateCustomerData = {
+    const payload: CreateCustomerData = {
       name: formData.name,
+      customerType: formData.customerType,
+      phone: formData.phone,
+      altPhone: formData.altPhone || undefined,
       email: formData.email || undefined,
-      phone: formData.phone || undefined,
       address: formData.address || undefined,
       city: formData.city || undefined,
-      customerType: formData.customerType as CustomerType,
-      creditLimit: formData.creditLimit || 0,
+      district: formData.district || undefined,
+      paymentTermDays: formData.paymentTermDays || undefined,
+      creditLimit: formData.creditLimit || undefined,
+      taxId: formData.taxId || undefined,
       notes: formData.notes || undefined,
     };
 
     if (editingCustomer) {
-      await updateMutation.mutateAsync({ id: editingCustomer.id, data });
+      await updateMutation.mutateAsync({ id: editingCustomer.id, data: payload });
     } else {
-      await createMutation.mutateAsync(data);
+      await createMutation.mutateAsync(payload);
     }
     setIsDialogOpen(false);
     reset();
@@ -142,13 +155,16 @@ const CustomersPage = () => {
             ) : (
               customers.map((c) => (
                 <TableRow key={c.id} className="cursor-pointer">
-                  <TableCell className="font-mono text-sm">{c.customerCode}</TableCell>
+                  {/* Backend returns 'code', not 'customerCode' */}
+                  <TableCell className="font-mono text-sm">{c.code}</TableCell>
                   <TableCell className="text-sm font-medium">{c.name}</TableCell>
                   <TableCell className="text-sm">{c.customerType}</TableCell>
                   <TableCell className="text-sm text-muted-foreground">{c.phone || "-"}</TableCell>
                   <TableCell className="text-sm">{c.city || "-"}</TableCell>
-                  <TableCell className="text-sm text-right font-medium">{formatCurrency(c.currentBalance)}</TableCell>
+                  {/* Backend uses accountReceivable.balance, not currentBalance */}
+                  <TableCell className="text-sm text-right font-medium">{formatCurrency(c.accountReceivable?.balance ?? 0)}</TableCell>
                   <TableCell>
+                    {/* Backend uses isActive boolean */}
                     <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium ${c.isActive ? "bg-success/10 text-success border-success/20" : "bg-muted text-muted-foreground border-border"}`}>
                       {c.isActive ? "Active" : "Inactive"}
                     </span>
@@ -187,15 +203,15 @@ const CustomersPage = () => {
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleSubmit(onSubmit)}>
-            <div className="grid gap-4 py-4">
+            <div className="grid gap-4 py-4 max-h-[60vh] overflow-y-auto pr-1">
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="name">Name *</Label>
                   <Input {...register("name")} />
-                  {errors.name && <p className="text-sm text-destructive">{errors.name.message}</p>}
+                  {errors.name && <p className="text-xs text-destructive">{errors.name.message}</p>}
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="customerType">Type *</Label>
+                  <Label htmlFor="customerType">Type</Label>
                   <Controller
                     name="customerType"
                     control={control}
@@ -214,14 +230,19 @@ const CustomersPage = () => {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="email">Email</Label>
-                  <Input type="email" {...register("email")} />
-                  {errors.email && <p className="text-sm text-destructive">{errors.email.message}</p>}
+                  <Label htmlFor="phone">Phone *</Label>
+                  <Input type="tel" {...register("phone")} placeholder="10+ digits" />
+                  {errors.phone && <p className="text-xs text-destructive">{errors.phone.message}</p>}
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="phone">Phone</Label>
-                  <Input {...register("phone")} />
+                  <Label htmlFor="altPhone">Alt. Phone</Label>
+                  <Input type="tel" {...register("altPhone")} />
                 </div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="email">Email</Label>
+                <Input type="email" {...register("email")} />
+                {errors.email && <p className="text-xs text-destructive">{errors.email.message}</p>}
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
@@ -229,8 +250,22 @@ const CustomersPage = () => {
                   <Input {...register("city")} />
                 </div>
                 <div className="space-y-2">
+                  <Label htmlFor="district">District</Label>
+                  <Input {...register("district")} />
+                </div>
+              </div>
+              <div className="grid grid-cols-3 gap-4">
+                <div className="space-y-2">
                   <Label htmlFor="creditLimit">Credit Limit (₹)</Label>
                   <Input type="number" {...register("creditLimit")} />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="paymentTermDays">Pay Terms (days)</Label>
+                  <Input type="number" {...register("paymentTermDays")} />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="taxId">Tax ID</Label>
+                  <Input {...register("taxId")} />
                 </div>
               </div>
               <div className="space-y-2">

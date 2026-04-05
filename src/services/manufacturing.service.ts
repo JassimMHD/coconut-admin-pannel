@@ -4,7 +4,10 @@ import type {
   CreateManufacturingData,
   UpdateManufacturingData,
   ManufacturingStats,
-  ProductType,
+  ManufacturingExpense,
+  ConversionRatio,
+  CreateConversionRatioData,
+  UpdateConversionRatioData,
   ApiResponse,
   PaginatedResponse,
   QueryParams,
@@ -33,16 +36,15 @@ export const manufacturingService = {
     return response.data.data;
   },
 
-  async getByProductType(productType: ProductType): Promise<ManufacturingBatch[]> {
-    const response = await api.get<ApiResponse<ManufacturingBatch[]>>(`/manufacturing/product-type/${productType}`);
-    return response.data.data;
-  },
-
   async getStats(): Promise<ManufacturingStats> {
     const response = await api.get<ApiResponse<ManufacturingStats>>('/manufacturing/stats');
     return response.data.data;
   },
 
+  /**
+   * Create a manufacturing batch.
+   * Required: productType, conversionRatioId (cuid), totalCoconutsUsed (int), quantityProduced, unit
+   */
   async create(data: CreateManufacturingData): Promise<ManufacturingBatch> {
     const response = await api.post<ApiResponse<ManufacturingBatch>>('/manufacturing', data);
     return response.data.data;
@@ -57,8 +59,32 @@ export const manufacturingService = {
     await api.delete(`/manufacturing/${id}`);
   },
 
-  async complete(id: string, data: { outputQuantity: number }): Promise<ManufacturingBatch> {
-    const response = await api.post<ApiResponse<ManufacturingBatch>>(`/manufacturing/${id}/complete`, data);
+  /** Get expenses attached to a manufacturing batch */
+  async getExpenses(manufacturingBatchId: string): Promise<ManufacturingExpense[]> {
+    const response = await api.get<ApiResponse<ManufacturingExpense[]>>(`/manufacturing/${manufacturingBatchId}/expenses`);
+    return response.data.data;
+  },
+
+  // ---- Conversion Ratio endpoints ----
+
+  /** Get all conversion ratios — used to populate dropdown in form */
+  async getConversionRatios(params?: QueryParams): Promise<ConversionRatio[]> {
+    const response = await api.get<ApiResponse<ConversionRatio[]>>(`/manufacturing/conversion-ratios${buildQueryString(params)}`);
+    return response.data.data;
+  },
+
+  async getConversionRatioById(id: string): Promise<ConversionRatio> {
+    const response = await api.get<ApiResponse<ConversionRatio>>(`/manufacturing/conversion-ratios/${id}`);
+    return response.data.data;
+  },
+
+  async createConversionRatio(data: CreateConversionRatioData): Promise<ConversionRatio> {
+    const response = await api.post<ApiResponse<ConversionRatio>>('/manufacturing/conversion-ratios', data);
+    return response.data.data;
+  },
+
+  async updateConversionRatio(id: string, data: UpdateConversionRatioData): Promise<ConversionRatio> {
+    const response = await api.put<ApiResponse<ConversionRatio>>(`/manufacturing/conversion-ratios/${id}`, data);
     return response.data.data;
   },
 };

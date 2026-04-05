@@ -24,9 +24,9 @@ const ReportsPage = () => {
     return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(value);
   };
 
-  const daily = dailyData?.data;
-  const profit = profitData?.data;
-  const sales = salesData?.data;
+  const daily = dailyData;
+  const profit = profitData;
+  const sales = salesData;
 
   return (
     <div className="space-y-6">

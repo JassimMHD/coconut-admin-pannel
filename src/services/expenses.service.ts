@@ -4,7 +4,7 @@ import type {
   CreateExpenseData,
   UpdateExpenseData,
   ExpenseStats,
-  ExpenseCategory,
+  ExpenseSummary,
   ApiResponse,
   PaginatedResponse,
   QueryParams,
@@ -33,26 +33,23 @@ export const expensesService = {
     return response.data.data;
   },
 
-  async getRecent(limit: number = 5): Promise<GeneralExpense[]> {
-    const response = await api.get<ApiResponse<GeneralExpense[]>>(`/expenses/recent?limit=${limit}`);
-    return response.data.data;
-  },
-
-  async getByCategory(category: ExpenseCategory): Promise<GeneralExpense[]> {
-    const response = await api.get<ApiResponse<GeneralExpense[]>>(`/expenses/category/${category}`);
-    return response.data.data;
-  },
-
   async getStats(): Promise<ExpenseStats> {
     const response = await api.get<ApiResponse<ExpenseStats>>('/expenses/stats');
     return response.data.data;
   },
 
-  async getSummary(): Promise<{ todayTotal: number; weekTotal: number; monthTotal: number; totalExpenses: number }> {
-    const response = await api.get<ApiResponse<{ todayTotal: number; weekTotal: number; monthTotal: number; totalExpenses: number }>>('/expenses/summary');
+  /** Get expense summary — supports groupBy: 'category' | 'month' | 'day' */
+  async getSummary(params?: { dateFrom?: string; dateTo?: string; groupBy?: 'category' | 'month' | 'day' }): Promise<ExpenseSummary> {
+    const response = await api.get<ApiResponse<ExpenseSummary>>(`/expenses/summary${buildQueryString(params as QueryParams)}`);
     return response.data.data;
   },
 
+  /**
+   * Create a general expense.
+   * category must be backend enum: 'TRANSPORT'|'LABOUR'|'COMMISSION'|'FUEL'|'ELECTRICITY'|'MAINTENANCE'|'PACKAGING'|'STORAGE'|'OTHER'
+   * expenseDate must be ISO datetime string (e.g. new Date(dateStr).toISOString())
+   * paymentMethod is NOT a backend field — do not include it
+   */
   async create(data: CreateExpenseData): Promise<GeneralExpense> {
     const response = await api.post<ApiResponse<GeneralExpense>>('/expenses', data);
     return response.data.data;

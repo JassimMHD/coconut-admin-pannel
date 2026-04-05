@@ -33,6 +33,8 @@ interface RecentBatchesProps {
 
 export const RecentBatches = ({ batches, isLoading }: RecentBatchesProps) => {
   const displayBatches = batches && batches.length > 0 ? batches : null;
+  const formatCount = (value?: number) => (typeof value === "number" ? value.toLocaleString() : "-");
+  const formatBatchDate = (value?: string) => (value ? format(new Date(value), "MMM d") : "-");
 
   return (
     <div className="rounded-xl border border-border bg-card">
@@ -72,17 +74,15 @@ export const RecentBatches = ({ batches, isLoading }: RecentBatchesProps) => {
               <TableRow key={batch.id} className="cursor-pointer">
                 <TableCell className="font-mono text-sm font-medium">{batch.batchNumber}</TableCell>
                 <TableCell className="text-sm">{batch.supplier?.name || 'Unknown'}</TableCell>
-                <TableCell className="text-sm text-right font-medium">{batch.totalQuantity.toLocaleString()}</TableCell>
-                <TableCell className="text-sm text-right">{batch.goodQuantity.toLocaleString()}</TableCell>
-                <TableCell className="text-sm text-right">{batch.badQuantity}</TableCell>
+                <TableCell className="text-sm text-right font-medium">{formatCount(batch.totalQuantity)}</TableCell>
+                <TableCell className="text-sm text-right">{formatCount(batch.goodQuantity)}</TableCell>
+                <TableCell className="text-sm text-right">{formatCount(batch.badQuantity)}</TableCell>
                 <TableCell>
                   <span className={cn("inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium", statusColors[batch.status] || statusColors.PENDING)}>
                     {batch.status}
                   </span>
                 </TableCell>
-                <TableCell className="text-sm text-muted-foreground">
-                  {format(new Date(batch.receivedDate), 'MMM d')}
-                </TableCell>
+                <TableCell className="text-sm text-muted-foreground">{formatBatchDate(batch.receivedDate)}</TableCell>
               </TableRow>
             ))
           ) : (

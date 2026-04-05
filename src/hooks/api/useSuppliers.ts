@@ -85,11 +85,13 @@ export const useDeleteSupplier = () => {
   });
 };
 
+/** Toggle supplier active status — sends { isActive: boolean } body */
 export const useToggleSupplierStatus = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (id: string) => suppliersService.toggleStatus(id),
+    mutationFn: ({ id, isActive }: { id: string; isActive: boolean }) =>
+      suppliersService.updateStatus(id, isActive),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: supplierKeys.all });
       toast.success('Supplier status updated');

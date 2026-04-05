@@ -3,9 +3,9 @@ import type {
   SalesOrder,
   CreateSalesOrderData,
   UpdateSalesOrderData,
+  UpdateOrderStatusData,
+  AddOrderPaymentData,
   SalesStats,
-  OrderStatus,
-  PaymentStatus,
   ApiResponse,
   PaginatedResponse,
   QueryParams,
@@ -44,6 +44,11 @@ export const salesService = {
     return response.data.data;
   },
 
+  /**
+   * Create a sales order.
+   * Required: customerId, items[] (each with itemType, description, quantity, unit, unitPrice)
+   * Product/byproduct enums MUST use backend values: 'OIL', 'COPRA', etc. (not 'COCONUT_OIL')
+   */
   async create(data: CreateSalesOrderData): Promise<SalesOrder> {
     const response = await api.post<ApiResponse<SalesOrder>>('/sales', data);
     return response.data.data;
@@ -58,16 +63,22 @@ export const salesService = {
     await api.delete(`/sales/${id}`);
   },
 
-  async updateStatus(id: string, status: OrderStatus): Promise<SalesOrder> {
-    const response = await api.patch<ApiResponse<SalesOrder>>(`/sales/${id}/status`, { status });
+  /**
+   * Update order status.
+   * Backend PATCH /sales/:id/status expects { status, deliveredDate? }
+   */
+  async updateStatus(id: string, data: UpdateOrderStatusData): Promise<SalesOrder> {
+    const response = await api.patch<ApiResponse<SalesOrder>>(`/sales/${id}/status`, data);
     return response.data.data;
   },
 
-  async updatePaymentStatus(id: string, paymentStatus: PaymentStatus, paidAmount?: number): Promise<SalesOrder> {
-    const response = await api.patch<ApiResponse<SalesOrder>>(`/sales/${id}/payment-status`, { 
-      paymentStatus, 
-      paidAmount 
-    });
+  /**
+   * Record a payment against an order.
+   * Backend PATCH /sales/:id/payment-status expects { amount, paymentMethod, referenceNumber?, ... }
+   * NOT just { paymentStatus, paidAmount }
+   */
+  async addPayment(id: string, data: AddOrderPaymentData): Promise<SalesOrder> {
+    const response = await api.patch<ApiResponse<SalesOrder>>(`/sales/${id}/payment-status`, data);
     return response.data.data;
   },
 };

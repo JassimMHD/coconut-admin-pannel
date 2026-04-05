@@ -15,6 +15,8 @@ import {
   Layers,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/contexts/AuthContext";
+import { hasRequiredRole } from "@/components/ProtectedRoute";
 
 interface AppSidebarProps {
   collapsed: boolean;
@@ -27,7 +29,9 @@ const navItems = [
   { to: "/suppliers", icon: Users, label: "Suppliers" },
   { to: "/customers", icon: UserCheck, label: "Customers" },
   { to: "/processing", icon: Cog, label: "Processing" },
+  { to: "/removal-types", icon: Layers, label: "Removal Types", requiresAdmin: true },
   { to: "/manufacturing", icon: Factory, label: "Manufacturing" },
+  { to: "/conversion-ratios", icon: Layers, label: "Conversion Ratios", requiresAdmin: true },
   { to: "/inventory", icon: Warehouse, label: "Inventory" },
   { to: "/sales", icon: ShoppingCart, label: "Sales Orders" },
   { to: "/expenses", icon: Receipt, label: "Expenses" },
@@ -36,6 +40,8 @@ const navItems = [
 
 export const AppSidebar = ({ collapsed, onToggle }: AppSidebarProps) => {
   const location = useLocation();
+  const { user } = useAuth();
+  const canManageRemovalTypes = !!user && hasRequiredRole(user.role, ["ADMIN"]);
 
   return (
     <aside
@@ -60,7 +66,9 @@ export const AppSidebar = ({ collapsed, onToggle }: AppSidebarProps) => {
       {/* Navigation */}
       <nav className="flex-1 overflow-y-auto py-4 px-2 scrollbar-thin">
         <div className="space-y-1">
-          {navItems.map((item) => {
+          {navItems
+            .filter((item) => (item.requiresAdmin ? canManageRemovalTypes : true))
+            .map((item) => {
             const isActive = item.to === "/" 
               ? location.pathname === "/" 
               : location.pathname.startsWith(item.to);

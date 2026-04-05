@@ -21,11 +21,10 @@ import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 
 const expenseSchema = z.object({
-  category: z.enum(["LABOR", "UTILITIES", "MAINTENANCE", "TRANSPORT", "PACKAGING", "OFFICE", "MARKETING", "OTHER"] as const),
+  category: z.enum(["TRANSPORT", "LABOUR", "COMMISSION", "FUEL", "ELECTRICITY", "MAINTENANCE", "PACKAGING", "STORAGE", "OTHER"] as const),
   amount: z.coerce.number().min(0.01, "Amount is required"),
   description: z.string().min(1, "Description is required"),
   expenseDate: z.string().min(1, "Date is required"),
-  paymentMethod: z.string().optional(),
   receiptNumber: z.string().optional(),
   notes: z.string().optional(),
 });
@@ -33,13 +32,14 @@ const expenseSchema = z.object({
 type ExpenseFormData = z.infer<typeof expenseSchema>;
 
 const categoryColors: Record<string, string> = {
-  LABOR: "bg-blue-500/10 text-blue-500 border-blue-500/20",
-  UTILITIES: "bg-yellow-500/10 text-yellow-500 border-yellow-500/20",
-  MAINTENANCE: "bg-orange-500/10 text-orange-500 border-orange-500/20",
-  TRANSPORT: "bg-purple-500/10 text-purple-500 border-purple-500/20",
-  PACKAGING: "bg-pink-500/10 text-pink-500 border-pink-500/20",
-  OFFICE: "bg-indigo-500/10 text-indigo-500 border-indigo-500/20",
-  MARKETING: "bg-green-500/10 text-green-500 border-green-500/20",
+  TRANSPORT: "bg-blue-500/10 text-blue-500 border-blue-500/20",
+  LABOUR: "bg-orange-500/10 text-orange-500 border-orange-500/20",
+  COMMISSION: "bg-indigo-500/10 text-indigo-500 border-indigo-500/20",
+  FUEL: "bg-red-500/10 text-red-500 border-red-500/20",
+  ELECTRICITY: "bg-yellow-500/10 text-yellow-500 border-yellow-500/20",
+  MAINTENANCE: "bg-pink-500/10 text-pink-500 border-pink-500/20",
+  PACKAGING: "bg-purple-500/10 text-purple-500 border-purple-500/20",
+  STORAGE: "bg-cyan-500/10 text-cyan-500 border-cyan-500/20",
   OTHER: "bg-gray-500/10 text-gray-500 border-gray-500/20",
 };
 
@@ -65,7 +65,7 @@ const ExpensesPage = () => {
   });
 
   const expenses = data?.data || [];
-  const summary = summaryData?.data;
+  const summary = summaryData;
 
   const openCreateDialog = () => {
     setEditingExpense(null);
@@ -74,7 +74,6 @@ const ExpensesPage = () => {
       amount: 0, 
       description: "", 
       expenseDate: new Date().toISOString().split('T')[0],
-      paymentMethod: "",
       receiptNumber: "",
       notes: "" 
     });
@@ -84,11 +83,10 @@ const ExpensesPage = () => {
   const openEditDialog = (expense: GeneralExpense) => {
     setEditingExpense(expense);
     reset({
-      category: expense.category,
+      category: expense.category as any,
       amount: expense.amount,
       description: expense.description,
       expenseDate: expense.expenseDate.split('T')[0],
-      paymentMethod: expense.paymentMethod || "",
       receiptNumber: expense.receiptNumber || "",
       notes: expense.notes || "",
     });
@@ -100,8 +98,7 @@ const ExpensesPage = () => {
       category: formData.category as ExpenseCategory,
       amount: formData.amount,
       description: formData.description,
-      expenseDate: formData.expenseDate,
-      paymentMethod: formData.paymentMethod || undefined,
+      expenseDate: new Date(formData.expenseDate).toISOString(),
       receiptNumber: formData.receiptNumber || undefined,
       notes: formData.notes || undefined,
     };
@@ -186,7 +183,6 @@ const ExpensesPage = () => {
               <TableHead className="text-xs">Category</TableHead>
               <TableHead className="text-xs">Description</TableHead>
               <TableHead className="text-xs text-right">Amount</TableHead>
-              <TableHead className="text-xs">Payment</TableHead>
               <TableHead className="text-xs">Receipt #</TableHead>
               <TableHead className="text-xs w-10"></TableHead>
             </TableRow>
@@ -195,14 +191,14 @@ const ExpensesPage = () => {
             {isLoading ? (
               [...Array(5)].map((_, i) => (
                 <TableRow key={i}>
-                  {[...Array(7)].map((_, j) => (
+                  {[...Array(6)].map((_, j) => (
                     <TableCell key={j}><Skeleton className="h-4 w-full" /></TableCell>
                   ))}
                 </TableRow>
               ))
             ) : expenses.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
                   No expenses found. Log your first expense to get started.
                 </TableCell>
               </TableRow>
@@ -210,16 +206,15 @@ const ExpensesPage = () => {
               expenses.map((expense) => (
                 <TableRow key={expense.id} className="cursor-pointer">
                   <TableCell className="text-sm text-muted-foreground">
-                    {format(new Date(expense.expenseDate), 'yyyy-MM-dd')}
+                    {expense.expenseDate ? format(new Date(expense.expenseDate), 'yyyy-MM-dd') : '-'}
                   </TableCell>
                   <TableCell>
-                    <span className={cn("inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium", categoryColors[expense.category])}>
+                    <span className={cn("inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium", categoryColors[expense.category] || categoryColors.OTHER)}>
                       {expense.category}
                     </span>
                   </TableCell>
                   <TableCell className="text-sm font-medium">{expense.description}</TableCell>
                   <TableCell className="text-sm text-right font-medium">{formatCurrency(expense.amount)}</TableCell>
-                  <TableCell className="text-sm">{expense.paymentMethod || "-"}</TableCell>
                   <TableCell className="text-sm text-muted-foreground">{expense.receiptNumber || "-"}</TableCell>
                   <TableCell>
                     <DropdownMenu>
@@ -266,13 +261,14 @@ const ExpensesPage = () => {
                       <Select onValueChange={field.onChange} value={field.value}>
                         <SelectTrigger><SelectValue placeholder="Select category" /></SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="LABOR">Labor</SelectItem>
-                          <SelectItem value="UTILITIES">Utilities</SelectItem>
-                          <SelectItem value="MAINTENANCE">Maintenance</SelectItem>
                           <SelectItem value="TRANSPORT">Transport</SelectItem>
+                          <SelectItem value="LABOUR">Labour</SelectItem>
+                          <SelectItem value="COMMISSION">Commission</SelectItem>
+                          <SelectItem value="FUEL">Fuel</SelectItem>
+                          <SelectItem value="ELECTRICITY">Electricity</SelectItem>
+                          <SelectItem value="MAINTENANCE">Maintenance</SelectItem>
                           <SelectItem value="PACKAGING">Packaging</SelectItem>
-                          <SelectItem value="OFFICE">Office</SelectItem>
-                          <SelectItem value="MARKETING">Marketing</SelectItem>
+                          <SelectItem value="STORAGE">Storage</SelectItem>
                           <SelectItem value="OTHER">Other</SelectItem>
                         </SelectContent>
                       </Select>
@@ -290,15 +286,11 @@ const ExpensesPage = () => {
                 <Input {...register("description")} />
                 {errors.description && <p className="text-sm text-destructive">{errors.description.message}</p>}
               </div>
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="amount">Amount (₹) *</Label>
                   <Input type="number" step="0.01" {...register("amount")} />
                   {errors.amount && <p className="text-sm text-destructive">{errors.amount.message}</p>}
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="paymentMethod">Payment Method</Label>
-                  <Input {...register("paymentMethod")} placeholder="Cash, UPI, etc." />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="receiptNumber">Receipt #</Label>

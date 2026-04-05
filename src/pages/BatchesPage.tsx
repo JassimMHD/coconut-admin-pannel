@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Package, Plus, Search, Filter, Loader2, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
+import { Package, Plus, Search, Loader2, MoreHorizontal, Pencil, Trash2, Tag } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,35 +10,38 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { cn } from "@/lib/utils";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { useBatches, useCreateBatch, useUpdateBatch, useDeleteBatch } from "@/hooks/api/useBatches";
 import { useSuppliers } from "@/hooks/api/useSuppliers";
-import type { CoconutBatch, CreateBatchData, QualityGrade } from "@/types/api.types";
+import type { CoconutBatch, CreateBatchData } from "@/types/api.types";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { format } from "date-fns";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 
+/**
+ * Backend createBatchSchema requires:
+ * - supplierId (cuid, required)
+ * - pickedDate (ISO datetime, required)
+ * - initialQuantity (int, required)
+ * - pricePerBig (float, required)
+ * - pricePerSmall (float, required)
+ * - pricePerCancelled, cancelledHandling, purchaseDate, receivedDate, notes (all optional)
+ */
 const batchSchema = z.object({
   supplierId: z.string().min(1, "Supplier is required"),
-  receivedDate: z.string().min(1, "Date is required"),
-  totalQuantity: z.coerce.number().min(1, "Total quantity is required"),
-  goodQuantity: z.coerce.number().min(0, "Good quantity is required"),
-  badQuantity: z.coerce.number().min(0, "Bad quantity is required"),
-  qualityGrade: z.enum(["A", "B", "C", "MIXED"] as const),
-  pricePerUnit: z.coerce.number().min(0, "Price is required"),
+  pickedDate: z.string().min(1, "Picked date is required"),
+  purchaseDate: z.string().optional(),
+  receivedDate: z.string().optional(),
+  initialQuantity: z.coerce.number().int().min(1, "Initial quantity is required"),
+  pricePerBig: z.coerce.number().min(0, "Price per big is required"),
+  pricePerSmall: z.coerce.number().min(0, "Price per small is required"),
+  pricePerCancelled: z.coerce.number().min(0).optional(),
+  cancelledHandling: z.enum(["LOSS", "REDUCED_SALE"] as const).optional(),
   notes: z.string().optional(),
 });
 
 type BatchFormData = z.infer<typeof batchSchema>;
-
-const statusColors: Record<string, string> = {
-  PENDING: "bg-info/10 text-info border-info/20",
-  PROCESSING: "bg-primary/10 text-primary border-primary/20",
-  COMPLETED: "bg-success/10 text-success border-success/20",
-  CANCELLED: "bg-destructive/10 text-destructive border-destructive/20",
-};
 
 const BatchesPage = () => {
   const [search, setSearch] = useState("");
@@ -56,24 +59,31 @@ const BatchesPage = () => {
   const { register, handleSubmit, reset, control, formState: { errors } } = useForm<BatchFormData>({
     resolver: zodResolver(batchSchema),
     defaultValues: {
-      qualityGrade: "A",
-      receivedDate: new Date().toISOString().split('T')[0],
+      cancelledHandling: "LOSS",
+      pickedDate: new Date().toISOString().split('T')[0],
     },
   });
 
   const batches = data?.data || [];
   const suppliers = suppliersData?.data || [];
 
+  const toISOString = (dateStr?: string) => {
+    if (!dateStr) return undefined;
+    return new Date(dateStr).toISOString();
+  };
+
   const openCreateDialog = () => {
     setEditingBatch(null);
     reset({
       supplierId: "",
-      receivedDate: new Date().toISOString().split('T')[0],
-      totalQuantity: 0,
-      goodQuantity: 0,
-      badQuantity: 0,
-      qualityGrade: "A",
-      pricePerUnit: 0,
+      pickedDate: new Date().toISOString().split('T')[0],
+      purchaseDate: "",
+      receivedDate: "",
+      initialQuantity: 0,
+      pricePerBig: 0,
+      pricePerSmall: 0,
+      pricePerCancelled: 0,
+      cancelledHandling: "LOSS",
       notes: "",
     });
     setIsDialogOpen(true);
@@ -83,33 +93,37 @@ const BatchesPage = () => {
     setEditingBatch(batch);
     reset({
       supplierId: batch.supplierId,
-      receivedDate: batch.receivedDate.split('T')[0],
-      totalQuantity: batch.totalQuantity,
-      goodQuantity: batch.goodQuantity,
-      badQuantity: batch.badQuantity,
-      qualityGrade: batch.qualityGrade,
-      pricePerUnit: batch.pricePerUnit,
+      pickedDate: batch.pickedDate?.split('T')[0] || "",
+      purchaseDate: batch.purchaseDate?.split('T')[0] || "",
+      receivedDate: batch.receivedDate?.split('T')[0] || "",
+      initialQuantity: batch.initialQuantity,
+      pricePerBig: batch.pricePerBig,
+      pricePerSmall: batch.pricePerSmall,
+      pricePerCancelled: batch.pricePerCancelled ?? 0,
+      cancelledHandling: batch.cancelledHandling ?? "LOSS",
       notes: batch.notes || "",
     });
     setIsDialogOpen(true);
   };
 
   const onSubmit = async (formData: BatchFormData) => {
-    const data: CreateBatchData = {
+    const payload: CreateBatchData = {
       supplierId: formData.supplierId,
-      receivedDate: formData.receivedDate,
-      totalQuantity: formData.totalQuantity,
-      goodQuantity: formData.goodQuantity,
-      badQuantity: formData.badQuantity,
-      qualityGrade: formData.qualityGrade as QualityGrade,
-      pricePerUnit: formData.pricePerUnit,
+      pickedDate: toISOString(formData.pickedDate) || new Date().toISOString(),
+      purchaseDate: toISOString(formData.purchaseDate),
+      receivedDate: toISOString(formData.receivedDate),
+      initialQuantity: formData.initialQuantity,
+      pricePerBig: formData.pricePerBig,
+      pricePerSmall: formData.pricePerSmall,
+      pricePerCancelled: formData.pricePerCancelled || undefined,
+      cancelledHandling: formData.cancelledHandling,
       notes: formData.notes || undefined,
     };
 
     if (editingBatch) {
-      await updateMutation.mutateAsync({ id: editingBatch.id, data });
+      await updateMutation.mutateAsync({ id: editingBatch.id, data: payload });
     } else {
-      await createMutation.mutateAsync(data);
+      await createMutation.mutateAsync(payload);
     }
     setIsDialogOpen(false);
     reset();
@@ -130,28 +144,14 @@ const BatchesPage = () => {
     <div className="space-y-6">
       <PageHeader
         title="Coconut Batches"
-        description="Manage incoming coconut batches and grading"
+        description="Manage coconut procurement batches from suppliers"
         icon={Package}
-        action={
-          <Button className="gap-2" onClick={openCreateDialog}>
-            <Plus className="h-4 w-4" /> New Batch
-          </Button>
-        }
+        action={<Button className="gap-2" onClick={openCreateDialog}><Plus className="h-4 w-4" /> New Batch</Button>}
       />
 
-      <div className="flex items-center gap-3">
-        <div className="relative flex-1 max-w-sm">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input 
-            placeholder="Search batches..." 
-            className="pl-9" 
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-        </div>
-        <Button variant="outline" size="sm" className="gap-2">
-          <Filter className="h-3.5 w-3.5" /> Filter
-        </Button>
+      <div className="relative max-w-sm">
+        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+        <Input placeholder="Search batches..." className="pl-9" value={search} onChange={(e) => setSearch(e.target.value)} />
       </div>
 
       <div className="rounded-xl border border-border bg-card">
@@ -160,12 +160,10 @@ const BatchesPage = () => {
             <TableRow className="hover:bg-transparent">
               <TableHead className="text-xs">Batch Code</TableHead>
               <TableHead className="text-xs">Supplier</TableHead>
-              <TableHead className="text-xs">Date</TableHead>
-              <TableHead className="text-xs text-right">Total</TableHead>
-              <TableHead className="text-xs text-right">Good</TableHead>
-              <TableHead className="text-xs text-right">Bad</TableHead>
-              <TableHead className="text-xs text-right">Cost</TableHead>
-              <TableHead className="text-xs">Grade</TableHead>
+              <TableHead className="text-xs">Picked Date</TableHead>
+              <TableHead className="text-xs text-right">Initial Qty</TableHead>
+              <TableHead className="text-xs text-right">Big / Small / Cancelled</TableHead>
+              <TableHead className="text-xs text-right">Total Cost</TableHead>
               <TableHead className="text-xs">Status</TableHead>
               <TableHead className="text-xs w-10"></TableHead>
             </TableRow>
@@ -174,33 +172,42 @@ const BatchesPage = () => {
             {isLoading ? (
               [...Array(5)].map((_, i) => (
                 <TableRow key={i}>
-                  {[...Array(10)].map((_, j) => (
+                  {[...Array(8)].map((_, j) => (
                     <TableCell key={j}><Skeleton className="h-4 w-full" /></TableCell>
                   ))}
                 </TableRow>
               ))
             ) : batches.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={10} className="text-center py-8 text-muted-foreground">
-                  No batches found. Create your first batch to get started.
+                <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
+                  No batches found. Add your first batch to get started.
                 </TableCell>
               </TableRow>
             ) : (
               batches.map((b) => (
                 <TableRow key={b.id} className="cursor-pointer">
-                  <TableCell className="font-mono text-sm font-medium">{b.batchNumber}</TableCell>
-                  <TableCell className="text-sm">{b.supplier?.name || 'Unknown'}</TableCell>
+                  {/* Backend field is batchCode, not batchNumber */}
+                  <TableCell className="font-mono text-sm font-medium">{b.batchCode}</TableCell>
+                  <TableCell className="text-sm">{b.supplier?.name || '-'}</TableCell>
                   <TableCell className="text-sm text-muted-foreground">
-                    {format(new Date(b.receivedDate), 'yyyy-MM-dd')}
+                    {b.pickedDate ? format(new Date(b.pickedDate), 'yyyy-MM-dd') : '-'}
                   </TableCell>
-                  <TableCell className="text-sm text-right font-medium">{b.totalQuantity.toLocaleString()}</TableCell>
-                  <TableCell className="text-sm text-right">{b.goodQuantity.toLocaleString()}</TableCell>
-                  <TableCell className="text-sm text-right">{b.badQuantity}</TableCell>
-                  <TableCell className="text-sm text-right font-medium">{formatCurrency(b.totalCost)}</TableCell>
-                  <TableCell className="text-sm">{b.qualityGrade}</TableCell>
+                  <TableCell className="text-sm text-right">{b.initialQuantity.toLocaleString()}</TableCell>
+                  <TableCell className="text-sm text-right text-muted-foreground">
+                    {b.isGraded ? `${b.bigCount} / ${b.smallCount} / ${b.cancelledCount}` : 'Not graded'}
+                  </TableCell>
+                  <TableCell className="text-sm text-right font-medium">{formatCurrency(b.totalBuyCost)}</TableCell>
                   <TableCell>
-                    <span className={cn("inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium", statusColors[b.status] || statusColors.PENDING)}>
-                      {b.status}
+                    <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium ${
+                      b.isFullyProcessed
+                        ? "bg-success/10 text-success border-success/20"
+                        : b.isProcessed
+                        ? "bg-primary/10 text-primary border-primary/20"
+                        : b.isGraded
+                        ? "bg-warning/10 text-warning border-warning/20"
+                        : "bg-muted text-muted-foreground border-border"
+                    }`}>
+                      {b.isFullyProcessed ? 'Processed' : b.isProcessed ? 'Partial' : b.isGraded ? 'Graded' : 'Pending'}
                     </span>
                   </TableCell>
                   <TableCell>
@@ -233,83 +240,95 @@ const BatchesPage = () => {
           <DialogHeader>
             <DialogTitle>{editingBatch ? 'Edit Batch' : 'New Batch'}</DialogTitle>
             <DialogDescription>
-              {editingBatch ? 'Update batch information.' : 'Record a new coconut batch arrival.'}
+              {editingBatch ? 'Update batch information.' : 'Record a new coconut procurement batch.'}
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleSubmit(onSubmit)}>
-            <div className="grid gap-4 py-4">
-              <div className="grid grid-cols-2 gap-4">
+            <div className="grid gap-4 py-4 max-h-[60vh] overflow-y-auto pr-1">
+              {/* Supplier */}
+              <div className="space-y-2">
+                <Label htmlFor="supplierId">Supplier *</Label>
+                <Controller
+                  name="supplierId"
+                  control={control}
+                  render={({ field }) => (
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <SelectTrigger><SelectValue placeholder="Select supplier" /></SelectTrigger>
+                      <SelectContent>
+                        {suppliers.map((s) => (
+                          <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                />
+                {errors.supplierId && <p className="text-xs text-destructive">{errors.supplierId.message}</p>}
+              </div>
+
+              {/* Dates */}
+              <div className="grid grid-cols-3 gap-3">
                 <div className="space-y-2">
-                  <Label htmlFor="supplierId">Supplier *</Label>
-                  <Controller
-                    name="supplierId"
-                    control={control}
-                    render={({ field }) => (
-                      <Select onValueChange={field.onChange} value={field.value}>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select supplier" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {suppliers.map((s) => (
-                            <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    )}
-                  />
-                  {errors.supplierId && <p className="text-sm text-destructive">{errors.supplierId.message}</p>}
+                  <Label htmlFor="pickedDate">Picked Date *</Label>
+                  <Input id="pickedDate" type="date" {...register("pickedDate")} />
+                  {errors.pickedDate && <p className="text-xs text-destructive">{errors.pickedDate.message}</p>}
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="receivedDate">Date *</Label>
-                  <Input type="date" {...register("receivedDate")} />
-                  {errors.receivedDate && <p className="text-sm text-destructive">{errors.receivedDate.message}</p>}
+                  <Label htmlFor="purchaseDate">Purchase Date</Label>
+                  <Input id="purchaseDate" type="date" {...register("purchaseDate")} />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="receivedDate">Received Date</Label>
+                  <Input id="receivedDate" type="date" {...register("receivedDate")} />
                 </div>
               </div>
-              <div className="grid grid-cols-3 gap-4">
+
+              {/* Initial Quantity */}
+              <div className="space-y-2">
+                <Label htmlFor="initialQuantity">Initial Quantity (coconuts) *</Label>
+                <Input id="initialQuantity" type="number" {...register("initialQuantity")} placeholder="Total number of coconuts" />
+                {errors.initialQuantity && <p className="text-xs text-destructive">{errors.initialQuantity.message}</p>}
+              </div>
+
+              {/* Prices */}
+              <div className="grid grid-cols-3 gap-3">
                 <div className="space-y-2">
-                  <Label htmlFor="totalQuantity">Total Qty *</Label>
-                  <Input type="number" {...register("totalQuantity")} />
-                  {errors.totalQuantity && <p className="text-sm text-destructive">{errors.totalQuantity.message}</p>}
+                  <Label htmlFor="pricePerBig">Price / Big (₹) *</Label>
+                  <Input id="pricePerBig" type="number" step="0.01" {...register("pricePerBig")} />
+                  {errors.pricePerBig && <p className="text-xs text-destructive">{errors.pricePerBig.message}</p>}
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="goodQuantity">Good Qty *</Label>
-                  <Input type="number" {...register("goodQuantity")} />
+                  <Label htmlFor="pricePerSmall">Price / Small (₹) *</Label>
+                  <Input id="pricePerSmall" type="number" step="0.01" {...register("pricePerSmall")} />
+                  {errors.pricePerSmall && <p className="text-xs text-destructive">{errors.pricePerSmall.message}</p>}
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="badQuantity">Bad Qty *</Label>
-                  <Input type="number" {...register("badQuantity")} />
+                  <Label htmlFor="pricePerCancelled">Price / Cancelled (₹)</Label>
+                  <Input id="pricePerCancelled" type="number" step="0.01" {...register("pricePerCancelled")} />
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="qualityGrade">Quality Grade *</Label>
-                  <Controller
-                    name="qualityGrade"
-                    control={control}
-                    render={({ field }) => (
-                      <Select onValueChange={field.onChange} value={field.value}>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select grade" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="A">Grade A</SelectItem>
-                          <SelectItem value="B">Grade B</SelectItem>
-                          <SelectItem value="C">Grade C</SelectItem>
-                          <SelectItem value="MIXED">Mixed</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    )}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="pricePerUnit">Price/Unit (₹) *</Label>
-                  <Input type="number" step="0.01" {...register("pricePerUnit")} />
-                  {errors.pricePerUnit && <p className="text-sm text-destructive">{errors.pricePerUnit.message}</p>}
-                </div>
+
+              {/* Cancelled Handling */}
+              <div className="space-y-2">
+                <Label htmlFor="cancelledHandling">Cancelled Coconut Handling</Label>
+                <Controller
+                  name="cancelledHandling"
+                  control={control}
+                  render={({ field }) => (
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <SelectTrigger><SelectValue placeholder="Select handling" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="LOSS">Loss (write off)</SelectItem>
+                        <SelectItem value="REDUCED_SALE">Reduced Sale Price</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  )}
+                />
               </div>
+
+              {/* Notes */}
               <div className="space-y-2">
                 <Label htmlFor="notes">Notes</Label>
-                <Textarea {...register("notes")} />
+                <Textarea id="notes" {...register("notes")} />
               </div>
             </div>
             <DialogFooter>

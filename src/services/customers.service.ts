@@ -4,6 +4,8 @@ import type {
   CreateCustomerData,
   UpdateCustomerData,
   CustomerStats,
+  CustomerPayment,
+  CreateCustomerPaymentData,
   ApiResponse,
   PaginatedResponse,
   QueryParams,
@@ -51,8 +53,24 @@ export const customersService = {
     await api.delete(`/customers/${id}`);
   },
 
-  async toggleStatus(id: string): Promise<Customer> {
-    const response = await api.patch<ApiResponse<Customer>>(`/customers/${id}/status`);
+  /**
+   * Update customer active status.
+   * Backend PATCH /customers/:id/status expects { isActive: boolean }
+   */
+  async updateStatus(id: string, isActive: boolean): Promise<Customer> {
+    const response = await api.patch<ApiResponse<Customer>>(`/customers/${id}/status`, { isActive });
+    return response.data.data;
+  },
+
+  /** Record a payment from a customer */
+  async addPayment(customerId: string, data: CreateCustomerPaymentData): Promise<CustomerPayment> {
+    const response = await api.post<ApiResponse<CustomerPayment>>(`/customers/${customerId}/payments`, data);
+    return response.data.data;
+  },
+
+  /** Get payment history for a customer */
+  async getPayments(customerId: string): Promise<CustomerPayment[]> {
+    const response = await api.get<ApiResponse<CustomerPayment[]>>(`/customers/${customerId}/payments`);
     return response.data.data;
   },
 };

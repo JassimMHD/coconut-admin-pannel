@@ -1,6 +1,7 @@
-// API Response Types
+// ==========================================
+// API Response Types — aligned to backend
+// ==========================================
 
-// Generic API Response wrapper
 export interface ApiResponse<T> {
   success: boolean;
   data: T;
@@ -18,8 +19,66 @@ export interface PaginatedResponse<T> {
   };
 }
 
-// User & Auth Types
-export type UserRole = 'VIEWER' | 'OPERATOR' | 'ACCOUNTANT' | 'MANAGER' | 'ADMIN' | 'SUPER_ADMIN';
+// ==========================================
+// ENUMS — must exactly match backend Prisma enums
+// ==========================================
+
+export type UserRole = 'SUPER_ADMIN' | 'ADMIN' | 'MANAGER' | 'OPERATOR' | 'ACCOUNTANT' | 'VIEWER';
+
+export type CoconutGrade = 'BIG' | 'SMALL' | 'CANCELLED';
+
+export type RemovalTypeEnum = 'NORMAL' | 'JUMBO' | 'DC' | 'MAALU';
+
+export type CancelledHandling = 'LOSS' | 'REDUCED_SALE';
+
+export type ProductType =
+  | 'OIL'
+  | 'COPRA'
+  | 'DESICCATED_COCONUT'
+  | 'COCONUT_MILK'
+  | 'COCONUT_CREAM'
+  | 'COCONUT_WATER'
+  | 'VIRGIN_COCONUT_OIL';
+
+export type ByproductType = 'HUSK' | 'SHELL' | 'COIR' | 'PITH' | 'SHELL_CHARCOAL';
+
+export type UnitOfMeasure = 'KG' | 'LITRE' | 'PIECE' | 'TONNE' | 'GALLON';
+
+export type PaymentStatus = 'PENDING' | 'PARTIAL' | 'PAID' | 'OVERDUE';
+
+export type PaymentMethod = 'CASH' | 'BANK_TRANSFER' | 'CHEQUE' | 'CREDIT' | 'MOBILE_PAYMENT';
+
+export type OrderStatus =
+  | 'DRAFT'
+  | 'CONFIRMED'
+  | 'PROCESSING'
+  | 'READY'
+  | 'SHIPPED'
+  | 'DELIVERED'
+  | 'CANCELLED';
+
+export type ExpenseCategory =
+  | 'TRANSPORT'
+  | 'LABOUR'
+  | 'COMMISSION'
+  | 'FUEL'
+  | 'ELECTRICITY'
+  | 'MAINTENANCE'
+  | 'PACKAGING'
+  | 'STORAGE'
+  | 'OTHER';
+
+export type TransactionType =
+  | 'PAYMENT_RECEIVED'
+  | 'PAYMENT_MADE'
+  | 'REFUND_ISSUED'
+  | 'REFUND_RECEIVED'
+  | 'CREDIT_NOTE'
+  | 'DEBIT_NOTE';
+
+// ==========================================
+// USER & AUTH
+// ==========================================
 
 export interface User {
   id: string;
@@ -53,85 +112,157 @@ export interface LoginCredentials {
 export interface RegisterData {
   email: string;
   password: string;
-  name: string;
+  firstName: string;
+  lastName: string;
+  phone?: string;
+  role?: UserRole;
 }
 
-// Supplier Types
-export type SupplierStatus = 'ACTIVE' | 'INACTIVE' | 'BLACKLISTED';
+// ==========================================
+// SUPPLIERS
+// ==========================================
 
 export interface Supplier {
   id: string;
+  code: string;
   name: string;
-  phone: string | null;
-  address: string | null;
-  email: string | null;
-  notes: string | null;
-  status: SupplierStatus;
+  contactPerson?: string;
+  phone: string;
+  altPhone?: string;
+  email?: string;
+  address?: string;
+  city?: string;
+  district?: string;
+  paymentTermDays: number;
+  creditLimit: number;
+  bankName?: string;
+  bankBranch?: string;
+  accountNumber?: string;
+  accountName?: string;
+  isActive: boolean;
+  notes?: string;
   createdAt: string;
   updatedAt: string;
+  supplierBalance?: {
+    totalPurchases: number;
+    totalPaid: number;
+    balance: number;
+  };
   _count?: {
     batches: number;
-  };
-  balance?: {
-    totalAmount: number;
-    paidAmount: number;
-    pendingAmount: number;
   };
 }
 
 export interface CreateSupplierData {
   name: string;
-  phone?: string;
-  address?: string;
+  contactPerson?: string;
+  phone: string;
+  altPhone?: string;
   email?: string;
+  address?: string;
+  city?: string;
+  district?: string;
+  paymentTermDays?: number;
+  creditLimit?: number;
+  bankName?: string;
+  bankBranch?: string;
+  accountNumber?: string;
+  accountName?: string;
   notes?: string;
 }
 
 export interface UpdateSupplierData extends Partial<CreateSupplierData> {
-  status?: SupplierStatus;
+  isActive?: boolean;
 }
 
 export interface SupplierStats {
   total: number;
   active: number;
   inactive: number;
-  blacklisted: number;
-  totalPendingPayments: number;
+  totalBalance: number;
 }
 
-// Customer Types
-export type CustomerStatus = 'ACTIVE' | 'INACTIVE';
+export interface SupplierPayment {
+  id: string;
+  supplierId: string;
+  batchId?: string;
+  amount: number;
+  paymentMethod: PaymentMethod;
+  referenceNumber?: string;
+  paymentDate: string;
+  notes?: string;
+  createdAt: string;
+}
+
+export interface CreateSupplierPaymentData {
+  amount: number;
+  paymentMethod: PaymentMethod;
+  referenceNumber?: string;
+  paymentDate?: string;
+  batchId?: string;
+  notes?: string;
+}
+
+// ==========================================
+// CUSTOMERS
+// ==========================================
+
+export type CustomerType = 'RETAIL' | 'WHOLESALE' | 'DISTRIBUTOR';
 
 export interface Customer {
   id: string;
+  code: string;
   name: string;
-  phone: string | null;
-  email: string | null;
-  address: string | null;
-  notes: string | null;
-  status: CustomerStatus;
+  customerType: string;
+  contactPerson?: string;
+  phone: string;
+  altPhone?: string;
+  email?: string;
+  address?: string;
+  city?: string;
+  district?: string;
+  paymentTermDays: number;
+  creditLimit: number;
+  taxId?: string;
+  bankName?: string;
+  bankBranch?: string;
+  accountNumber?: string;
+  isActive: boolean;
+  notes?: string;
   createdAt: string;
   updatedAt: string;
-  _count?: {
-    orders: number;
+  accountReceivable?: {
+    totalSales: number;
+    totalReceived: number;
+    balance: number;
+    overdueAmount: number;
   };
-  receivable?: {
-    totalAmount: number;
-    paidAmount: number;
-    pendingAmount: number;
+  _count?: {
+    salesOrders: number;
   };
 }
 
 export interface CreateCustomerData {
   name: string;
-  phone?: string;
+  customerType?: string;
+  contactPerson?: string;
+  phone: string;
+  altPhone?: string;
   email?: string;
   address?: string;
+  city?: string;
+  district?: string;
+  paymentTermDays?: number;
+  creditLimit?: number;
+  taxId?: string;
+  bankName?: string;
+  bankBranch?: string;
+  accountNumber?: string;
   notes?: string;
 }
 
 export interface UpdateCustomerData extends Partial<CreateCustomerData> {
-  status?: CustomerStatus;
+  isActive?: boolean;
 }
 
 export interface CustomerStats {
@@ -141,187 +272,359 @@ export interface CustomerStats {
   totalReceivables: number;
 }
 
-// Batch Types
-export type BatchStatus = 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'CANCELLED';
-export type QualityGrade = 'A' | 'B' | 'C' | 'MIXED';
+export interface CustomerPayment {
+  id: string;
+  customerId: string;
+  orderId?: string;
+  transactionType: TransactionType;
+  amount: number;
+  paymentMethod: PaymentMethod;
+  referenceNumber?: string;
+  chequeNumber?: string;
+  chequeDate?: string;
+  paymentDate: string;
+  notes?: string;
+  createdAt: string;
+}
+
+export interface CreateCustomerPaymentData {
+  amount: number;
+  paymentMethod: PaymentMethod;
+  transactionType?: TransactionType;
+  referenceNumber?: string;
+  chequeNumber?: string;
+  chequeDate?: string;
+  paymentDate?: string;
+  orderId?: string;
+  notes?: string;
+}
+
+// ==========================================
+// COCONUT BATCHES
+// ==========================================
 
 export interface CoconutBatch {
   id: string;
-  batchNumber: string;
+  batchCode: string;
   supplierId: string;
-  supplier?: Supplier;
+  createdById: string;
+  pickedDate: string;
+  purchaseDate: string;
   receivedDate: string;
-  totalQuantity: number;
-  goodQuantity: number;
-  badQuantity: number;
-  qualityGrade: QualityGrade;
-  pricePerUnit: number;
-  totalCost: number;
-  status: BatchStatus;
-  notes: string | null;
+  initialQuantity: number;
+  bigCount: number;
+  smallCount: number;
+  cancelledCount: number;
+  pricePerBig: number;
+  pricePerSmall: number;
+  pricePerCancelled: number;
+  cancelledHandling: CancelledHandling;
+  totalBuyCost: number;
+  isGraded: boolean;
+  isProcessed: boolean;
+  isFullyProcessed: boolean;
+  notes?: string;
   createdAt: string;
   updatedAt: string;
-  createdById: string;
+  supplier?: Supplier;
   createdBy?: User;
 }
 
 export interface CreateBatchData {
   supplierId: string;
-  receivedDate: string;
-  totalQuantity: number;
-  goodQuantity: number;
-  badQuantity: number;
-  qualityGrade: QualityGrade;
-  pricePerUnit: number;
+  pickedDate: string;           // ISO datetime string
+  purchaseDate?: string;        // ISO datetime string
+  receivedDate?: string;        // ISO datetime string
+  initialQuantity: number;
+  pricePerBig: number;
+  pricePerSmall: number;
+  pricePerCancelled?: number;
+  cancelledHandling?: CancelledHandling;
   notes?: string;
 }
 
-export interface UpdateBatchData extends Partial<CreateBatchData> {
-  status?: BatchStatus;
+export interface UpdateBatchData {
+  pickedDate?: string;
+  purchaseDate?: string;
+  receivedDate?: string;
+  pricePerBig?: number;
+  pricePerSmall?: number;
+  pricePerCancelled?: number;
+  cancelledHandling?: CancelledHandling;
+  notes?: string;
+}
+
+export interface GradeBatchData {
+  bigCount: number;
+  smallCount: number;
+  cancelledCount: number;
 }
 
 export interface BatchStats {
   totalBatches: number;
-  pendingBatches: number;
-  processingBatches: number;
-  completedBatches: number;
+  gradedBatches: number;
+  processedBatches: number;
   totalCoconuts: number;
-  totalCost: number;
+  totalBuyCost: number;
 }
 
-// Processing Types
-export type ProcessingStatus = 'PENDING' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED';
-export type RemovalType = 'HUSK' | 'SHELL' | 'BOTH';
+export interface BatchExpense {
+  id: string;
+  batchId: string;
+  category: ExpenseCategory;
+  description: string;
+  amount: number;
+  receiptNumber?: string;
+  expenseDate: string;
+  notes?: string;
+  createdAt: string;
+}
+
+export interface CreateBatchExpenseData {
+  category: ExpenseCategory;
+  description: string;
+  amount: number;
+  receiptNumber?: string;
+  expenseDate?: string;
+  notes?: string;
+}
+
+// ==========================================
+// REMOVAL TYPE CONFIG
+// ==========================================
+
+export interface RemovalTypeConfig {
+  id: string;
+  type: RemovalTypeEnum;
+  name: string;
+  description?: string;
+  costPerCoconut: number;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateRemovalTypeData {
+  type: RemovalTypeEnum;
+  name: string;
+  description?: string;
+  costPerCoconut: number;
+  isActive?: boolean;
+}
+
+export interface UpdateRemovalTypeData {
+  name?: string;
+  description?: string;
+  costPerCoconut?: number;
+  isActive?: boolean;
+}
+
+// ==========================================
+// PROCESSING
+// ==========================================
 
 export interface Processing {
   id: string;
   batchId: string;
-  batch?: CoconutBatch;
-  startTime: string;
-  endTime: string | null;
-  removalType: RemovalType;
-  inputQuantity: number;
-  outputQuantity: number;
-  wasteQuantity: number;
-  status: ProcessingStatus;
-  notes: string | null;
+  processedById: string;
+  removalTypeId: string;
+  coconutGrade: CoconutGrade;
+  quantity: number;
+  costPerCoconut: number;
+  totalProcessingCost: number;
+  processingDate: string;
+  notes?: string;
   createdAt: string;
   updatedAt: string;
-  createdById: string;
-  createdBy?: User;
+  batch?: CoconutBatch;
+  processedBy?: User;
+  removalType?: RemovalTypeConfig;
 }
 
 export interface CreateProcessingData {
   batchId: string;
-  startTime: string;
-  removalType: RemovalType;
-  inputQuantity: number;
+  removalTypeId: string;
+  coconutGrade: CoconutGrade;
+  quantity: number;
+  processingDate?: string;
   notes?: string;
 }
 
 export interface UpdateProcessingData {
-  endTime?: string;
-  outputQuantity?: number;
-  wasteQuantity?: number;
-  status?: ProcessingStatus;
+  quantity?: number;
+  processingDate?: string;
   notes?: string;
 }
 
 export interface ProcessingStats {
   totalProcessings: number;
-  inProgress: number;
-  completed: number;
-  totalInput: number;
-  totalOutput: number;
-  totalWaste: number;
-  efficiency: number;
+  totalCoconutsProcessed: number;
+  totalProcessingCost: number;
 }
 
-// Manufacturing Types
-export type ProductType = 'COCONUT_OIL' | 'VIRGIN_COCONUT_OIL' | 'COCONUT_MILK' | 'COCONUT_CREAM' | 'DESICCATED_COCONUT' | 'COCONUT_FLOUR' | 'COCONUT_WATER' | 'COCONUT_CHIPS';
-export type ManufacturingStatus = 'PENDING' | 'IN_PROGRESS' | 'QUALITY_CHECK' | 'COMPLETED' | 'FAILED';
+// ==========================================
+// CONVERSION RATIO
+// ==========================================
+
+export interface ConversionRatio {
+  id: string;
+  productType: ProductType;
+  name: string;
+  description?: string;
+  coconutsPerUnit: number;
+  outputUnit: UnitOfMeasure;
+  huskYieldKg: number;
+  shellYieldKg: number;
+  coirYieldKg: number;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateConversionRatioData {
+  productType: ProductType;
+  name: string;
+  description?: string;
+  coconutsPerUnit: number;
+  outputUnit: UnitOfMeasure;
+  huskYieldKg?: number;
+  shellYieldKg?: number;
+  coirYieldKg?: number;
+  isActive?: boolean;
+}
+
+export interface UpdateConversionRatioData {
+  name?: string;
+  description?: string;
+  coconutsPerUnit?: number;
+  outputUnit?: UnitOfMeasure;
+  huskYieldKg?: number;
+  shellYieldKg?: number;
+  coirYieldKg?: number;
+  isActive?: boolean;
+}
+
+// ==========================================
+// MANUFACTURING
+// ==========================================
 
 export interface ManufacturingBatch {
   id: string;
-  batchNumber: string;
+  batchCode: string;
   productType: ProductType;
-  startTime: string;
-  endTime: string | null;
-  inputQuantity: number;
-  outputQuantity: number;
-  outputUnit: string;
-  status: ManufacturingStatus;
-  qualityScore: number | null;
-  notes: string | null;
+  conversionRatioId: string;
+  manufacturedById: string;
+  totalCoconutsUsed: number;
+  quantityProduced: number;
+  unit: UnitOfMeasure;
+  qualityGrade?: string;
+  qualityNotes?: string;
+  labourCost: number;
+  utilityCost: number;
+  packagingCost: number;
+  otherCost: number;
+  totalCost: number;
+  costPerUnit: number;
+  manufacturingDate: string;
+  expiryDate?: string;
+  notes?: string;
   createdAt: string;
   updatedAt: string;
-  createdById: string;
-  createdBy?: User;
-  inputs?: ManufacturingInput[];
-}
-
-export interface ManufacturingInput {
-  id: string;
-  manufacturingBatchId: string;
-  processingId: string;
-  quantity: number;
-  processing?: Processing;
+  conversionRatio?: ConversionRatio;
+  manufacturedBy?: User;
 }
 
 export interface CreateManufacturingData {
   productType: ProductType;
-  startTime: string;
-  inputQuantity: number;
-  processingIds: string[];
+  conversionRatioId: string;
+  totalCoconutsUsed: number;
+  quantityProduced: number;
+  unit: UnitOfMeasure;
+  qualityGrade?: string;
+  qualityNotes?: string;
+  labourCost?: number;
+  utilityCost?: number;
+  packagingCost?: number;
+  otherCost?: number;
+  manufacturingDate?: string;
+  expiryDate?: string;
+  processingIds?: string[];
   notes?: string;
 }
 
 export interface UpdateManufacturingData {
-  endTime?: string;
-  outputQuantity?: number;
-  outputUnit?: string;
-  status?: ManufacturingStatus;
-  qualityScore?: number;
+  quantityProduced?: number;
+  qualityGrade?: string;
+  qualityNotes?: string;
+  labourCost?: number;
+  utilityCost?: number;
+  packagingCost?: number;
+  otherCost?: number;
+  expiryDate?: string;
   notes?: string;
 }
 
 export interface ManufacturingStats {
   totalBatches: number;
-  inProgress: number;
-  completed: number;
-  failed: number;
-  byProductType: Record<ProductType, number>;
+  totalCoconutsUsed: number;
+  totalQuantityProduced: number;
+  totalCost: number;
 }
 
-// Inventory Types
+export interface ManufacturingExpense {
+  id: string;
+  manufacturingBatchId: string;
+  category: ExpenseCategory;
+  description: string;
+  amount: number;
+  receiptNumber?: string;
+  expenseDate: string;
+  notes?: string;
+  createdAt: string;
+}
+
+// ==========================================
+// INVENTORY
+// ==========================================
+
 export interface ProductInventory {
   id: string;
   productType: ProductType;
-  quantity: number;
-  unit: string;
-  minStockLevel: number;
-  maxStockLevel: number;
-  lastRestocked: string | null;
-  expiryDate: string | null;
-  updatedAt: string;
+  totalStock: number;
+  reservedStock: number;
+  availableStock: number;
+  unit: UnitOfMeasure;
+  averageCost: number;
+  totalValue: number;
+  reorderLevel: number;
+  lastUpdated: string;
 }
 
 export interface ByproductInventory {
   id: string;
-  byproductType: string;
-  quantity: number;
-  unit: string;
-  updatedAt: string;
+  byproductConfigId: string;
+  totalStock: number;
+  unit: UnitOfMeasure;
+  averageCost: number;
+  lastUpdated: string;
+  byproductConfig?: {
+    type: ByproductType;
+    name: string;
+    defaultPricePerUnit: number;
+  };
 }
 
 export interface BatchInventory {
   id: string;
   batchId: string;
+  grade: CoconutGrade;
+  initialStock: number;
+  currentStock: number;
+  processedCount: number;
+  soldCount: number;
+  lostCount: number;
+  lastUpdated: string;
   batch?: CoconutBatch;
-  availableQuantity: number;
-  processedQuantity: number;
-  cancelledQuantity: number;
-  updatedAt: string;
 }
 
 export interface InventoryOverview {
@@ -330,142 +633,165 @@ export interface InventoryOverview {
   byproducts: ByproductInventory[];
 }
 
-export interface InventoryStats {
-  totalBatchesInStock: number;
-  totalProductsInStock: number;
-  lowStockItems: number;
-  expiringItems: number;
+export interface AdjustInventoryData {
+  type: 'batch' | 'product' | 'byproduct';
+  itemId: string;
+  adjustment: number;
+  reason: string;
+  reference?: string;
 }
 
-export interface LowStockItem {
-  id: string;
-  productType: ProductType;
-  currentStock: number;
-  minStockLevel: number;
-  unit: string;
-}
-
-export interface ExpiringItem {
-  id: string;
-  productType: ProductType;
-  quantity: number;
-  unit: string;
-  expiryDate: string;
-  daysUntilExpiry: number;
-}
-
-// Sales Types
-export type OrderStatus = 'PENDING' | 'CONFIRMED' | 'PROCESSING' | 'SHIPPED' | 'DELIVERED' | 'CANCELLED';
-export type PaymentStatus = 'PENDING' | 'PARTIAL' | 'PAID' | 'REFUNDED';
+// ==========================================
+// SALES ORDERS
+// ==========================================
 
 export interface SalesOrderItem {
   id: string;
   orderId: string;
-  productType: ProductType;
-  byproductType: string | null;
+  itemType: 'PRODUCT' | 'BYPRODUCT';
+  productType?: ProductType;
+  byproductType?: ByproductType;
+  description: string;
   quantity: number;
-  unit: string;
-  pricePerUnit: number;
-  totalPrice: number;
+  unit: UnitOfMeasure;
+  unitPrice: number;
+  unitCost: number;
+  discountPercent: number;
+  lineTotal: number;
 }
 
 export interface SalesOrder {
   id: string;
   orderNumber: string;
   customerId: string;
-  customer?: Customer;
+  createdById: string;
   orderDate: string;
-  deliveryDate: string | null;
+  expectedDelivery?: string;
+  deliveredDate?: string;
   status: OrderStatus;
-  paymentStatus: PaymentStatus;
   subtotal: number;
-  discount: number;
-  tax: number;
+  discountPercent: number;
+  discountAmount: number;
+  taxPercent: number;
+  taxAmount: number;
   totalAmount: number;
+  paymentStatus: PaymentStatus;
   paidAmount: number;
-  notes: string | null;
+  balanceDue: number;
+  dueDate?: string;
+  shippingAddress?: string;
+  notes?: string;
   createdAt: string;
   updatedAt: string;
-  createdById: string;
+  customer?: Customer;
   createdBy?: User;
   items?: SalesOrderItem[];
 }
 
+export interface SalesOrderItemInput {
+  itemType: 'PRODUCT' | 'BYPRODUCT';
+  productType?: ProductType;
+  byproductType?: ByproductType;
+  description: string;
+  quantity: number;
+  unit: UnitOfMeasure;
+  unitPrice: number;
+  unitCost?: number;
+  discountPercent?: number;
+}
+
 export interface CreateSalesOrderData {
   customerId: string;
-  orderDate: string;
-  deliveryDate?: string;
-  items: {
-    productType?: ProductType;
-    byproductType?: string;
-    quantity: number;
-    pricePerUnit: number;
-  }[];
-  discount?: number;
-  tax?: number;
+  orderDate?: string;
+  expectedDelivery?: string;
+  discountPercent?: number;
+  taxPercent?: number;
+  dueDate?: string;
+  shippingAddress?: string;
   notes?: string;
+  items: SalesOrderItemInput[];
 }
 
 export interface UpdateSalesOrderData {
-  deliveryDate?: string;
-  status?: OrderStatus;
-  paymentStatus?: PaymentStatus;
-  discount?: number;
-  tax?: number;
+  expectedDelivery?: string;
+  discountPercent?: number;
+  taxPercent?: number;
+  dueDate?: string;
+  shippingAddress?: string;
+  notes?: string;
+}
+
+export interface UpdateOrderStatusData {
+  status: OrderStatus;
+  deliveredDate?: string;
+}
+
+export interface AddOrderPaymentData {
+  amount: number;
+  paymentMethod: PaymentMethod;
+  referenceNumber?: string;
+  chequeNumber?: string;
+  chequeDate?: string;
+  paymentDate?: string;
   notes?: string;
 }
 
 export interface SalesStats {
   totalOrders: number;
-  pendingOrders: number;
+  draftOrders: number;
+  confirmedOrders: number;
   deliveredOrders: number;
   totalRevenue: number;
   pendingPayments: number;
-  thisMonthRevenue: number;
 }
 
-// Expense Types
-export type ExpenseCategory = 'UTILITIES' | 'SALARIES' | 'MAINTENANCE' | 'SUPPLIES' | 'TRANSPORT' | 'MARKETING' | 'RENT' | 'INSURANCE' | 'TAXES' | 'OTHER';
-export type ExpenseStatus = 'PENDING' | 'APPROVED' | 'PAID' | 'REJECTED';
+// ==========================================
+// GENERAL EXPENSES
+// ==========================================
 
 export interface GeneralExpense {
   id: string;
   category: ExpenseCategory;
-  amount: number;
   description: string;
-  date: string;
-  status: ExpenseStatus;
-  receiptUrl: string | null;
-  notes: string | null;
+  amount: number;
+  receiptNumber?: string;
+  expenseDate: string;
+  notes?: string;
+  periodMonth?: number;
+  periodYear?: number;
   createdAt: string;
   updatedAt: string;
-  createdById: string;
-  createdBy?: User;
-  approvedById: string | null;
-  approvedBy?: User;
 }
 
 export interface CreateExpenseData {
   category: ExpenseCategory;
-  amount: number;
   description: string;
-  date: string;
+  amount: number;
+  receiptNumber?: string;
+  expenseDate?: string;      // ISO datetime string
   notes?: string;
-  receiptUrl?: string;
+  periodMonth?: number;
+  periodYear?: number;
 }
 
-export interface UpdateExpenseData extends Partial<CreateExpenseData> {
-  status?: ExpenseStatus;
-}
+export interface UpdateExpenseData extends Partial<CreateExpenseData> {}
 
 export interface ExpenseStats {
   totalExpenses: number;
-  pendingApproval: number;
   thisMonthTotal: number;
-  byCategory: Record<ExpenseCategory, number>;
+  byCategory: Partial<Record<ExpenseCategory, number>>;
 }
 
-// Dashboard Types
+export interface ExpenseSummary {
+  total: number;
+  byCategory: Partial<Record<ExpenseCategory, number>>;
+  byMonth: Array<{ month: string; total: number }>;
+}
+
+// ==========================================
+// DASHBOARD
+// ==========================================
+
 export interface DashboardOverview {
   todaysBatches: number;
   todaysProcessing: number;
@@ -504,34 +830,16 @@ export interface SalesTrend {
   revenue: number;
 }
 
-// Reports Types
-export interface DailySummary {
-  id: string;
-  date: string;
-  totalBatches: number;
-  totalCoconuts: number;
-  totalProcessed: number;
-  totalManufactured: number;
-  totalOrders: number;
-  totalRevenue: number;
-  totalExpenses: number;
-  netProfit: number;
-  createdAt: string;
-}
+// ==========================================
+// SETTINGS
+// ==========================================
 
-export interface ReportParams {
-  startDate: string;
-  endDate: string;
-  type?: string;
-}
-
-// Settings Types
 export interface SystemSetting {
   id: string;
   key: string;
   value: string;
-  category: string;
-  description: string | null;
+  description?: string;
+  dataType?: 'string' | 'number' | 'boolean' | 'json';
   updatedAt: string;
 }
 
@@ -550,7 +858,10 @@ export interface InventorySettings {
   autoReorderEnabled: boolean;
 }
 
-// Query Params
+// ==========================================
+// QUERY PARAMS
+// ==========================================
+
 export interface PaginationParams {
   page?: number;
   limit?: number;
@@ -564,8 +875,10 @@ export interface SortParams {
 export interface FilterParams {
   search?: string;
   status?: string;
+  dateFrom?: string;
+  dateTo?: string;
   startDate?: string;
   endDate?: string;
 }
 
-export type QueryParams = PaginationParams & SortParams & FilterParams;
+export type QueryParams = PaginationParams & SortParams & FilterParams & Record<string, string | number | boolean | undefined>;

@@ -4,6 +4,9 @@ import type {
   CreateProcessingData,
   UpdateProcessingData,
   ProcessingStats,
+  RemovalTypeConfig,
+  CreateRemovalTypeData,
+  UpdateRemovalTypeData,
   ApiResponse,
   PaginatedResponse,
   QueryParams,
@@ -37,6 +40,10 @@ export const processingService = {
     return response.data.data;
   },
 
+  /**
+   * Create a processing record.
+   * Required: batchId (cuid), removalTypeId (cuid), coconutGrade ('BIG'|'SMALL'|'CANCELLED'), quantity (int)
+   */
   async create(data: CreateProcessingData): Promise<Processing> {
     const response = await api.post<ApiResponse<Processing>>('/processing', data);
     return response.data.data;
@@ -51,8 +58,29 @@ export const processingService = {
     await api.delete(`/processing/${id}`);
   },
 
-  async complete(id: string, data: { outputQuantity: number; wasteQuantity: number }): Promise<Processing> {
-    const response = await api.post<ApiResponse<Processing>>(`/processing/${id}/complete`, data);
+  // ---- Removal Type Config endpoints ----
+
+  /** Get all removal type configurations */
+  async getRemovalTypes(params?: QueryParams): Promise<RemovalTypeConfig[]> {
+    const response = await api.get<ApiResponse<RemovalTypeConfig[]>>(`/processing/removal-types${buildQueryString(params)}`);
+    return response.data.data;
+  },
+
+  /** Get a single removal type config */
+  async getRemovalTypeById(id: string): Promise<RemovalTypeConfig> {
+    const response = await api.get<ApiResponse<RemovalTypeConfig>>(`/processing/removal-types/${id}`);
+    return response.data.data;
+  },
+
+  /** Create a removal type config */
+  async createRemovalType(data: CreateRemovalTypeData): Promise<RemovalTypeConfig> {
+    const response = await api.post<ApiResponse<RemovalTypeConfig>>('/processing/removal-types', data);
+    return response.data.data;
+  },
+
+  /** Update a removal type config */
+  async updateRemovalType(id: string, data: UpdateRemovalTypeData): Promise<RemovalTypeConfig> {
+    const response = await api.put<ApiResponse<RemovalTypeConfig>>(`/processing/removal-types/${id}`, data);
     return response.data.data;
   },
 };

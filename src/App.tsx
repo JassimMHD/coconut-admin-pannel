@@ -11,7 +11,9 @@ import BatchesPage from "./pages/BatchesPage";
 import SuppliersPage from "./pages/SuppliersPage";
 import CustomersPage from "./pages/CustomersPage";
 import ProcessingPage from "./pages/ProcessingPage";
+import RemovalTypesPage from "./pages/RemovalTypesPage";
 import ManufacturingPage from "./pages/ManufacturingPage";
+import ConversionRatiosPage from "./pages/ConversionRatiosPage";
 import InventoryPage from "./pages/InventoryPage";
 import SalesPage from "./pages/SalesPage";
 import ExpensesPage from "./pages/ExpensesPage";
@@ -57,7 +59,23 @@ const App = () => (
               <Route path="/suppliers" element={<SuppliersPage />} />
               <Route path="/customers" element={<CustomersPage />} />
               <Route path="/processing" element={<ProcessingPage />} />
+              <Route
+                path="/removal-types"
+                element={
+                  <ProtectedRoute requiredRoles={["ADMIN"]}>
+                    <RemovalTypesPage />
+                  </ProtectedRoute>
+                }
+              />
               <Route path="/manufacturing" element={<ManufacturingPage />} />
+              <Route
+                path="/conversion-ratios"
+                element={
+                  <ProtectedRoute requiredRoles={["ADMIN"]}>
+                    <ConversionRatiosPage />
+                  </ProtectedRoute>
+                }
+              />
               <Route path="/inventory" element={<InventoryPage />} />
               <Route path="/sales" element={<SalesPage />} />
               <Route path="/expenses" element={<ExpensesPage />} />

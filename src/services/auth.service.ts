@@ -1,16 +1,14 @@
 import api, { setTokens, clearTokens, getRefreshToken } from '@/lib/api';
-import type { 
-  User, 
-  LoginCredentials, 
-  LoginResponse, 
-  RegisterData, 
-  ApiResponse 
+import type {
+  User,
+  LoginCredentials,
+  LoginResponse,
+  RegisterData,
+  ApiResponse,
 } from '@/types/api.types';
 
 export const authService = {
-  /**
-   * Login user with email and password
-   */
+  /** Login user with email and password */
   async login(credentials: LoginCredentials): Promise<LoginResponse> {
     const response = await api.post<ApiResponse<{ user: User; tokens: { accessToken: string; refreshToken: string } }>>('/auth/login', credentials);
     const { user, tokens } = response.data.data;
@@ -18,9 +16,7 @@ export const authService = {
     return { user, accessToken: tokens.accessToken, refreshToken: tokens.refreshToken };
   },
 
-  /**
-   * Register a new user
-   */
+  /** Register a new user — backend requires firstName + lastName, not name */
   async register(data: RegisterData): Promise<LoginResponse> {
     const response = await api.post<ApiResponse<{ user: User; tokens: { accessToken: string; refreshToken: string } }>>('/auth/register', data);
     const { user, tokens } = response.data.data;
@@ -28,9 +24,7 @@ export const authService = {
     return { user, accessToken: tokens.accessToken, refreshToken: tokens.refreshToken };
   },
 
-  /**
-   * Logout current user
-   */
+  /** Logout current user */
   async logout(): Promise<void> {
     const refreshToken = getRefreshToken();
     try {
@@ -38,45 +32,38 @@ export const authService = {
         await api.post('/auth/logout', { refreshToken });
       }
     } catch (error) {
-      // Ignore errors during logout
       console.warn('Logout request failed:', error);
     } finally {
       clearTokens();
     }
   },
 
-  /**
-   * Get current authenticated user
-   */
+  /** Get current authenticated user */
   async getCurrentUser(): Promise<User> {
     const response = await api.get<ApiResponse<User>>('/auth/me');
     return response.data.data;
   },
 
   /**
-   * Change password for current user
+   * Change password — backend requires currentPassword, newPassword, AND confirmPassword
    */
-  async changePassword(currentPassword: string, newPassword: string): Promise<void> {
-    await api.post('/auth/change-password', { currentPassword, newPassword });
+  async changePassword(currentPassword: string, newPassword: string, confirmPassword: string): Promise<void> {
+    await api.post('/auth/change-password', { currentPassword, newPassword, confirmPassword });
   },
 
-  /**
-   * Request password reset email
-   */
+  /** Request password reset email */
   async forgotPassword(email: string): Promise<void> {
     await api.post('/auth/forgot-password', { email });
   },
 
   /**
-   * Reset password with token
+   * Reset password with token — backend requires token, password, confirmPassword
    */
-  async resetPassword(token: string, password: string): Promise<void> {
-    await api.post('/auth/reset-password', { token, password });
+  async resetPassword(token: string, password: string, confirmPassword: string): Promise<void> {
+    await api.post('/auth/reset-password', { token, password, confirmPassword });
   },
 
-  /**
-   * Refresh access token
-   */
+  /** Refresh access token */
   async refreshToken(): Promise<{ accessToken: string; refreshToken: string }> {
     const refreshToken = getRefreshToken();
     if (!refreshToken) {

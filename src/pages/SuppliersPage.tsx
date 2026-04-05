@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -16,11 +16,18 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 
+// Backend createSupplierSchema: name required, phone required (min 10)
 const supplierSchema = z.object({
-  name: z.string().min(2, "Name is required"),
-  phone: z.string().optional(),
-  email: z.string().email().optional().or(z.literal("")),
+  name: z.string().min(2, "Name must be at least 2 characters"),
+  phone: z.string().min(10, "Phone must be at least 10 digits"),
+  contactPerson: z.string().optional(),
+  altPhone: z.string().optional(),
+  email: z.string().email("Invalid email").optional().or(z.literal("")),
   address: z.string().optional(),
+  city: z.string().optional(),
+  district: z.string().optional(),
+  paymentTermDays: z.coerce.number().min(0).optional(),
+  creditLimit: z.coerce.number().min(0).optional(),
   notes: z.string().optional(),
 });
 
@@ -47,7 +54,7 @@ const SuppliersPage = () => {
 
   const openCreateDialog = () => {
     setEditingSupplier(null);
-    reset({ name: "", phone: "", email: "", address: "", notes: "" });
+    reset({ name: "", phone: "", contactPerson: "", altPhone: "", email: "", address: "", city: "", district: "", paymentTermDays: 30, creditLimit: 0, notes: "" });
     setIsDialogOpen(true);
   };
 
@@ -56,26 +63,38 @@ const SuppliersPage = () => {
     reset({
       name: supplier.name,
       phone: supplier.phone || "",
+      contactPerson: supplier.contactPerson || "",
+      altPhone: supplier.altPhone || "",
       email: supplier.email || "",
       address: supplier.address || "",
+      city: supplier.city || "",
+      district: supplier.district || "",
+      paymentTermDays: supplier.paymentTermDays ?? 30,
+      creditLimit: supplier.creditLimit ?? 0,
       notes: supplier.notes || "",
     });
     setIsDialogOpen(true);
   };
 
   const onSubmit = async (formData: SupplierFormData) => {
-    const data: CreateSupplierData = {
+    const payload: CreateSupplierData = {
       name: formData.name,
-      phone: formData.phone || undefined,
+      phone: formData.phone,
+      contactPerson: formData.contactPerson || undefined,
+      altPhone: formData.altPhone || undefined,
       email: formData.email || undefined,
       address: formData.address || undefined,
+      city: formData.city || undefined,
+      district: formData.district || undefined,
+      paymentTermDays: formData.paymentTermDays || undefined,
+      creditLimit: formData.creditLimit || undefined,
       notes: formData.notes || undefined,
     };
 
     if (editingSupplier) {
-      await updateMutation.mutateAsync({ id: editingSupplier.id, data });
+      await updateMutation.mutateAsync({ id: editingSupplier.id, data: payload });
     } else {
-      await createMutation.mutateAsync(data);
+      await createMutation.mutateAsync(payload);
     }
     setIsDialogOpen(false);
     reset();
@@ -111,10 +130,10 @@ const SuppliersPage = () => {
         <Table>
           <TableHeader>
             <TableRow className="hover:bg-transparent">
+              <TableHead className="text-xs">Code</TableHead>
               <TableHead className="text-xs">Name</TableHead>
               <TableHead className="text-xs">Phone</TableHead>
-              <TableHead className="text-xs">Email</TableHead>
-              <TableHead className="text-xs">Address</TableHead>
+              <TableHead className="text-xs">City</TableHead>
               <TableHead className="text-xs text-right">Balance Due</TableHead>
               <TableHead className="text-xs">Status</TableHead>
               <TableHead className="text-xs w-10"></TableHead>
@@ -124,13 +143,9 @@ const SuppliersPage = () => {
             {isLoading ? (
               [...Array(5)].map((_, i) => (
                 <TableRow key={i}>
-                  <TableCell><Skeleton className="h-4 w-32" /></TableCell>
-                  <TableCell><Skeleton className="h-4 w-28" /></TableCell>
-                  <TableCell><Skeleton className="h-4 w-36" /></TableCell>
-                  <TableCell><Skeleton className="h-4 w-40" /></TableCell>
-                  <TableCell><Skeleton className="h-4 w-20" /></TableCell>
-                  <TableCell><Skeleton className="h-4 w-16" /></TableCell>
-                  <TableCell><Skeleton className="h-4 w-8" /></TableCell>
+                  {[...Array(7)].map((_, j) => (
+                    <TableCell key={j}><Skeleton className="h-4 w-full" /></TableCell>
+                  ))}
                 </TableRow>
               ))
             ) : suppliers.length === 0 ? (
@@ -142,16 +157,17 @@ const SuppliersPage = () => {
             ) : (
               suppliers.map((s) => (
                 <TableRow key={s.id} className="cursor-pointer">
+                  <TableCell className="font-mono text-sm">{s.code}</TableCell>
                   <TableCell className="text-sm font-medium">{s.name}</TableCell>
                   <TableCell className="text-sm text-muted-foreground">{s.phone || '-'}</TableCell>
-                  <TableCell className="text-sm text-muted-foreground">{s.email || '-'}</TableCell>
-                  <TableCell className="text-sm">{s.address || '-'}</TableCell>
+                  <TableCell className="text-sm">{s.city || '-'}</TableCell>
                   <TableCell className="text-sm text-right font-medium">
-                    {s.balance ? formatCurrency(s.balance.pendingAmount) : '₹0'}
+                    {s.supplierBalance ? formatCurrency(s.supplierBalance.balance) : '₹0'}
                   </TableCell>
                   <TableCell>
-                    <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium ${s.status === "ACTIVE" ? "bg-success/10 text-success border-success/20" : "bg-muted text-muted-foreground border-border"}`}>
-                      {s.status}
+                    {/* Backend uses isActive boolean, not status string */}
+                    <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium ${s.isActive ? "bg-success/10 text-success border-success/20" : "bg-muted text-muted-foreground border-border"}`}>
+                      {s.isActive ? "Active" : "Inactive"}
                     </span>
                   </TableCell>
                   <TableCell>
@@ -165,8 +181,8 @@ const SuppliersPage = () => {
                         <DropdownMenuItem onClick={() => openEditDialog(s)}>
                           <Pencil className="h-4 w-4 mr-2" /> Edit
                         </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => toggleStatusMutation.mutate(s.id)}>
-                          {s.status === 'ACTIVE' ? 'Deactivate' : 'Activate'}
+                        <DropdownMenuItem onClick={() => toggleStatusMutation.mutate({ id: s.id, isActive: !s.isActive })}>
+                          {s.isActive ? 'Deactivate' : 'Activate'}
                         </DropdownMenuItem>
                         <DropdownMenuItem onClick={() => setDeletingId(s.id)} className="text-destructive">
                           <Trash2 className="h-4 w-4 mr-2" /> Delete
@@ -183,7 +199,7 @@ const SuppliersPage = () => {
 
       {/* Create/Edit Dialog */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent>
+        <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle>{editingSupplier ? 'Edit Supplier' : 'Add Supplier'}</DialogTitle>
             <DialogDescription>
@@ -191,20 +207,53 @@ const SuppliersPage = () => {
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleSubmit(onSubmit)}>
-            <div className="space-y-4 py-4">
-              <div className="space-y-2">
-                <Label htmlFor="name">Name *</Label>
-                <Input id="name" {...register("name")} />
-                {errors.name && <p className="text-sm text-destructive">{errors.name.message}</p>}
+            <div className="space-y-4 py-4 max-h-[60vh] overflow-y-auto pr-1">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-2">
+                  <Label htmlFor="name">Name *</Label>
+                  <Input id="name" {...register("name")} />
+                  {errors.name && <p className="text-xs text-destructive">{errors.name.message}</p>}
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="contactPerson">Contact Person</Label>
+                  <Input id="contactPerson" {...register("contactPerson")} />
+                </div>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="phone">Phone</Label>
-                <Input id="phone" {...register("phone")} />
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-2">
+                  <Label htmlFor="phone">Phone *</Label>
+                  <Input id="phone" type="tel" {...register("phone")} placeholder="10+ digits" />
+                  {errors.phone && <p className="text-xs text-destructive">{errors.phone.message}</p>}
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="altPhone">Alt. Phone</Label>
+                  <Input id="altPhone" type="tel" {...register("altPhone")} />
+                </div>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="email">Email</Label>
                 <Input id="email" type="email" {...register("email")} />
-                {errors.email && <p className="text-sm text-destructive">{errors.email.message}</p>}
+                {errors.email && <p className="text-xs text-destructive">{errors.email.message}</p>}
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-2">
+                  <Label htmlFor="city">City</Label>
+                  <Input id="city" {...register("city")} />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="district">District</Label>
+                  <Input id="district" {...register("district")} />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-2">
+                  <Label htmlFor="paymentTermDays">Payment Terms (days)</Label>
+                  <Input id="paymentTermDays" type="number" {...register("paymentTermDays")} />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="creditLimit">Credit Limit (₹)</Label>
+                  <Input id="creditLimit" type="number" {...register("creditLimit")} />
+                </div>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="address">Address</Label>

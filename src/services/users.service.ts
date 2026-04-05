@@ -1,22 +1,26 @@
 import api from '@/lib/api';
 import type {
   User,
+  UserRole,
   ApiResponse,
   PaginatedResponse,
   QueryParams,
-  UserRole,
 } from '@/types/api.types';
 
-interface CreateUserData {
-  name: string;
+export interface CreateUserData {
   email: string;
   password: string;
+  firstName: string;    // backend requires firstName (not name)
+  lastName: string;     // backend requires lastName (not name)
+  phone?: string;
   role?: UserRole;
 }
 
-interface UpdateUserData {
-  name?: string;
+export interface UpdateUserData {
   email?: string;
+  firstName?: string;
+  lastName?: string;
+  phone?: string;
   role?: UserRole;
   isActive?: boolean;
 }
@@ -58,8 +62,12 @@ export const usersService = {
     await api.delete(`/users/${id}`);
   },
 
-  async toggleStatus(id: string): Promise<User> {
-    const response = await api.patch<ApiResponse<User>>(`/users/${id}/status`);
+  /**
+   * Toggle user active status.
+   * Backend PATCH /users/:id/status expects { isActive: boolean }
+   */
+  async updateStatus(id: string, isActive: boolean): Promise<User> {
+    const response = await api.patch<ApiResponse<User>>(`/users/${id}/status`, { isActive });
     return response.data.data;
   },
 };

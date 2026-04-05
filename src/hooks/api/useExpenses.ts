@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { expensesService } from '@/services/expenses.service';
-import type { CreateExpenseData, UpdateExpenseData, QueryParams, ExpenseCategory } from '@/types/api.types';
+import type { CreateExpenseData, UpdateExpenseData, QueryParams } from '@/types/api.types';
 import { toast } from 'sonner';
 import { parseApiError } from '@/lib/api';
 
@@ -12,8 +12,6 @@ export const expenseKeys = {
   detail: (id: string) => [...expenseKeys.details(), id] as const,
   stats: () => [...expenseKeys.all, 'stats'] as const,
   summary: () => [...expenseKeys.all, 'summary'] as const,
-  recent: (limit?: number) => [...expenseKeys.all, 'recent', limit] as const,
-  byCategory: (category: ExpenseCategory) => [...expenseKeys.all, 'category', category] as const,
 };
 
 export const useExpenses = (params?: QueryParams) => {
@@ -31,21 +29,6 @@ export const useExpense = (id: string) => {
   });
 };
 
-export const useRecentExpenses = (limit: number = 5) => {
-  return useQuery({
-    queryKey: expenseKeys.recent(limit),
-    queryFn: () => expensesService.getRecent(limit),
-  });
-};
-
-export const useExpensesByCategory = (category: ExpenseCategory) => {
-  return useQuery({
-    queryKey: expenseKeys.byCategory(category),
-    queryFn: () => expensesService.getByCategory(category),
-    enabled: !!category,
-  });
-};
-
 export const useExpenseStats = () => {
   return useQuery({
     queryKey: expenseKeys.stats(),
@@ -53,10 +36,10 @@ export const useExpenseStats = () => {
   });
 };
 
-export const useExpenseSummary = () => {
+export const useExpenseSummary = (params?: { dateFrom?: string; dateTo?: string; groupBy?: 'category' | 'month' | 'day' }) => {
   return useQuery({
-    queryKey: expenseKeys.summary(),
-    queryFn: () => expensesService.getSummary(),
+    queryKey: [...expenseKeys.summary(), params],
+    queryFn: () => expensesService.getSummary(params),
   });
 };
 

@@ -4,6 +4,8 @@ import type {
   CreateSupplierData,
   UpdateSupplierData,
   SupplierStats,
+  SupplierPayment,
+  CreateSupplierPaymentData,
   ApiResponse,
   PaginatedResponse,
   QueryParams,
@@ -51,8 +53,24 @@ export const suppliersService = {
     await api.delete(`/suppliers/${id}`);
   },
 
-  async toggleStatus(id: string): Promise<Supplier> {
-    const response = await api.patch<ApiResponse<Supplier>>(`/suppliers/${id}/status`);
+  /**
+   * Toggle supplier active status.
+   * Backend PATCH /suppliers/:id/status expects { isActive: boolean }
+   */
+  async updateStatus(id: string, isActive: boolean): Promise<Supplier> {
+    const response = await api.patch<ApiResponse<Supplier>>(`/suppliers/${id}/status`, { isActive });
+    return response.data.data;
+  },
+
+  /** Record a payment to a supplier */
+  async addPayment(supplierId: string, data: CreateSupplierPaymentData): Promise<SupplierPayment> {
+    const response = await api.post<ApiResponse<SupplierPayment>>(`/suppliers/${supplierId}/payments`, data);
+    return response.data.data;
+  },
+
+  /** Get payment history for a supplier */
+  async getPayments(supplierId: string): Promise<SupplierPayment[]> {
+    const response = await api.get<ApiResponse<SupplierPayment[]>>(`/suppliers/${supplierId}/payments`);
     return response.data.data;
   },
 };

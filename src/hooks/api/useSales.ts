@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { salesService } from '@/services/sales.service';
-import type { CreateSalesOrderData, UpdateSalesOrderData, QueryParams, OrderStatus, PaymentStatus } from '@/types/api.types';
+import type { CreateSalesOrderData, UpdateSalesOrderData, UpdateOrderStatusData, AddOrderPaymentData, QueryParams } from '@/types/api.types';
 import { toast } from 'sonner';
 import { parseApiError } from '@/lib/api';
 
@@ -97,8 +97,8 @@ export const useUpdateOrderStatus = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ id, status }: { id: string; status: OrderStatus }) =>
-      salesService.updateStatus(id, status),
+    mutationFn: ({ id, data }: { id: string; data: UpdateOrderStatusData }) =>
+      salesService.updateStatus(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: salesKeys.all });
       toast.success('Order status updated');
@@ -110,15 +110,15 @@ export const useUpdateOrderStatus = () => {
   });
 };
 
-export const useUpdatePaymentStatus = () => {
+export const useAddOrderPayment = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ id, paymentStatus, paidAmount }: { id: string; paymentStatus: PaymentStatus; paidAmount?: number }) =>
-      salesService.updatePaymentStatus(id, paymentStatus, paidAmount),
+    mutationFn: ({ id, data }: { id: string; data: AddOrderPaymentData }) =>
+      salesService.addPayment(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: salesKeys.all });
-      toast.success('Payment status updated');
+      toast.success('Payment recorded successfully');
     },
     onError: (error) => {
       const apiError = parseApiError(error);

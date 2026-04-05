@@ -3,7 +3,10 @@ import type {
   CoconutBatch,
   CreateBatchData,
   UpdateBatchData,
+  GradeBatchData,
   BatchStats,
+  BatchExpense,
+  CreateBatchExpenseData,
   ApiResponse,
   PaginatedResponse,
   QueryParams,
@@ -42,6 +45,10 @@ export const batchesService = {
     return response.data.data;
   },
 
+  /**
+   * Create a new coconut batch.
+   * Required: supplierId, pickedDate (ISO datetime), initialQuantity, pricePerBig, pricePerSmall
+   */
   async create(data: CreateBatchData): Promise<CoconutBatch> {
     const response = await api.post<ApiResponse<CoconutBatch>>('/batches', data);
     return response.data.data;
@@ -54,6 +61,27 @@ export const batchesService = {
 
   async delete(id: string): Promise<void> {
     await api.delete(`/batches/${id}`);
+  },
+
+  /**
+   * Grade a batch — sets bigCount, smallCount, cancelledCount.
+   * POST /batches/:id/grade
+   */
+  async grade(id: string, data: GradeBatchData): Promise<CoconutBatch> {
+    const response = await api.post<ApiResponse<CoconutBatch>>(`/batches/${id}/grade`, data);
+    return response.data.data;
+  },
+
+  /** Get expenses attached to a batch */
+  async getExpenses(batchId: string): Promise<BatchExpense[]> {
+    const response = await api.get<ApiResponse<BatchExpense[]>>(`/batches/${batchId}/expenses`);
+    return response.data.data;
+  },
+
+  /** Add an expense to a batch */
+  async addExpense(batchId: string, data: CreateBatchExpenseData): Promise<BatchExpense> {
+    const response = await api.post<ApiResponse<BatchExpense>>(`/batches/${batchId}/expenses`, data);
+    return response.data.data;
   },
 };
 

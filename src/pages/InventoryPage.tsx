@@ -1,365 +1,336 @@
 import { useState } from "react";
-import { Warehouse, Plus, Search, Loader2, MoreHorizontal, Pencil, Trash2, TrendingUp, TrendingDown } from "lucide-react";
+import { Warehouse, Loader2, ArrowRightLeft, Search } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { useInventory, useCreateInventory, useUpdateInventory, useDeleteInventory, useInventorySummary } from "@/hooks/api/useInventory";
-import type { Inventory, CreateInventoryData, ProductType, InventoryCategory } from "@/types/api.types";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useInventoryOverview, useAdjustInventory } from "@/hooks/api/useInventory";
+import type { AdjustInventoryData, ProductInventory, ByproductInventory, BatchInventory } from "@/types/api.types";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { cn } from "@/lib/utils";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { format } from "date-fns";
 
-const inventorySchema = z.object({
-  productType: z.enum(["COCONUT_OIL", "COPRA", "COCONUT_MILK", "DESICCATED_COCONUT", "COIR", "SHELL_CHARCOAL", "RAW_COCONUT", "HUSK", "SHELL"] as const),
-  category: z.enum(["RAW_MATERIAL", "FINISHED_PRODUCT", "BYPRODUCT"] as const),
-  quantity: z.coerce.number().min(0, "Quantity must be positive"),
-  unit: z.string().min(1, "Unit is required"),
-  unitCost: z.coerce.number().min(0, "Unit cost must be positive"),
-  reorderLevel: z.coerce.number().min(0).optional(),
-  warehouseLocation: z.string().optional(),
-  notes: z.string().optional(),
+const adjustSchema = z.object({
+  type: z.enum(["batch", "product", "byproduct"]),
+  itemId: z.string().min(1, "Item is required"),
+  adjustment: z.coerce.number().refine(val => val !== 0, "Adjustment cannot be 0"),
+  reason: z.string().min(1, "Reason is required"),
+  reference: z.string().optional(),
 });
 
-type InventoryFormData = z.infer<typeof inventorySchema>;
-
-const categoryColors: Record<string, string> = {
-  RAW_MATERIAL: "bg-info/10 text-info border-info/20",
-  FINISHED_PRODUCT: "bg-success/10 text-success border-success/20",
-  BYPRODUCT: "bg-warning/10 text-warning border-warning/20",
-};
+type AdjustFormData = z.infer<typeof adjustSchema>;
 
 const productTypeLabels: Record<string, string> = {
-  COCONUT_OIL: "Coconut Oil",
+  OIL: "Coconut Oil",
   COPRA: "Copra",
-  COCONUT_MILK: "Coconut Milk",
   DESICCATED_COCONUT: "Desiccated Coconut",
-  COIR: "Coir",
-  SHELL_CHARCOAL: "Shell Charcoal",
-  RAW_COCONUT: "Raw Coconut",
-  HUSK: "Husk",
-  SHELL: "Shell",
+  COCONUT_MILK: "Coconut Milk",
+  COCONUT_CREAM: "Coconut Cream",
+  COCONUT_WATER: "Coconut Water",
+  VIRGIN_COCONUT_OIL: "Virgin Coconut Oil",
+};
+
+const formatCurrency = (value: number) => {
+  return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(value);
 };
 
 const InventoryPage = () => {
   const [search, setSearch] = useState("");
-  const [page, setPage] = useState(1);
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [editingItem, setEditingItem] = useState<Inventory | null>(null);
-  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [isAdjustOpen, setIsAdjustOpen] = useState(false);
+  const [selectedType, setSelectedType] = useState<"batch" | "product" | "byproduct">("product");
 
-  const { data, isLoading } = useInventory({ search, page, limit: 20 });
-  const { data: summaryData } = useInventorySummary();
-  const createMutation = useCreateInventory();
-  const updateMutation = useUpdateInventory();
-  const deleteMutation = useDeleteInventory();
+  const { data, isLoading } = useInventoryOverview();
+  const adjustMutation = useAdjustInventory();
 
-  const { register, handleSubmit, reset, control, formState: { errors } } = useForm<InventoryFormData>({
-    resolver: zodResolver(inventorySchema),
-    defaultValues: { productType: "RAW_COCONUT", category: "RAW_MATERIAL", unit: "kg" },
+  const overview = data;
+  const products = overview?.products || [];
+  const byproducts = overview?.byproducts || [];
+  const batches = overview?.batches || [];
+
+  const { register, handleSubmit, reset, control, watch, formState: { errors } } = useForm<AdjustFormData>({
+    resolver: zodResolver(adjustSchema),
+    defaultValues: { type: "product", adjustment: 0 },
   });
 
-  const items = data?.data || [];
-  const summary = summaryData?.data;
+  const watchType = watch("type");
 
-  const openCreateDialog = () => {
-    setEditingItem(null);
-    reset({ productType: "RAW_COCONUT", category: "RAW_MATERIAL", quantity: 0, unit: "kg", unitCost: 0, reorderLevel: 0, warehouseLocation: "", notes: "" });
-    setIsDialogOpen(true);
-  };
-
-  const openEditDialog = (item: Inventory) => {
-    setEditingItem(item);
+  const openAdjustDialog = (type: "batch" | "product" | "byproduct", itemId?: string) => {
+    setSelectedType(type);
     reset({
-      productType: item.productType as any,
-      category: item.category,
-      quantity: item.quantity,
-      unit: item.unit,
-      unitCost: item.unitCost,
-      reorderLevel: item.reorderLevel || 0,
-      warehouseLocation: item.warehouseLocation || "",
-      notes: item.notes || "",
+      type,
+      itemId: itemId || "",
+      adjustment: 0,
+      reason: "",
+      reference: "",
     });
-    setIsDialogOpen(true);
+    setIsAdjustOpen(true);
   };
 
-  const onSubmit = async (formData: InventoryFormData) => {
-    const data: CreateInventoryData = {
-      productType: formData.productType as ProductType,
-      category: formData.category as InventoryCategory,
-      quantity: formData.quantity,
-      unit: formData.unit,
-      unitCost: formData.unitCost,
-      reorderLevel: formData.reorderLevel || undefined,
-      warehouseLocation: formData.warehouseLocation || undefined,
-      notes: formData.notes || undefined,
+  const onSubmit = async (formData: AdjustFormData) => {
+    const payload: AdjustInventoryData = {
+      type: formData.type,
+      itemId: formData.itemId,
+      adjustment: formData.adjustment,
+      reason: formData.reason,
+      reference: formData.reference || undefined,
     };
 
-    if (editingItem) {
-      await updateMutation.mutateAsync({ id: editingItem.id, data });
-    } else {
-      await createMutation.mutateAsync(data);
-    }
-    setIsDialogOpen(false);
+    await adjustMutation.mutateAsync(payload);
+    setIsAdjustOpen(false);
     reset();
   };
 
-  const handleDelete = async () => {
-    if (deletingId) {
-      await deleteMutation.mutateAsync(deletingId);
-      setDeletingId(null);
-    }
-  };
-
-  const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(value);
-  };
+  // Filter lists based on search
+  const filteredProducts = products.filter(p => !search || p.productType.toLowerCase().includes(search.toLowerCase()));
+  const filteredByproducts = byproducts.filter(b => !search || b.byproductConfig?.name.toLowerCase().includes(search.toLowerCase()));
+  const filteredBatches = batches.filter(b => !search || b.batch?.batchCode.toLowerCase().includes(search.toLowerCase()));
 
   return (
     <div className="space-y-6">
       <PageHeader 
-        title="Inventory" 
-        description="Track stock levels for coconuts, products, and byproducts" 
+        title="Inventory Tracking" 
+        description="Monitor stock levels across raw materials, active batches, finished products, and byproducts" 
         icon={Warehouse}
-        action={<Button className="gap-2" onClick={openCreateDialog}><Plus className="h-4 w-4" /> Add Item</Button>}
+        action={
+          <Button className="gap-2" onClick={() => openAdjustDialog("product")}>
+            <ArrowRightLeft className="h-4 w-4" /> Adjust Stock
+          </Button>
+        }
       />
 
-      {/* Summary Cards */}
-      {summary && (
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Total Items</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{summary.totalItems}</div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Total Value</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{formatCurrency(summary.totalValue)}</div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-1">
-                <TrendingDown className="h-4 w-4 text-destructive" /> Low Stock
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-destructive">{summary.lowStockCount}</div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-1">
-                <TrendingUp className="h-4 w-4 text-success" /> In Stock
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-success">{summary.inStockCount}</div>
-            </CardContent>
-          </Card>
-        </div>
-      )}
-      
       <div className="relative max-w-sm">
         <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
         <Input placeholder="Search inventory..." className="pl-9" value={search} onChange={(e) => setSearch(e.target.value)} />
       </div>
 
-      <div className="rounded-xl border border-border bg-card">
-        <Table>
-          <TableHeader>
-            <TableRow className="hover:bg-transparent">
-              <TableHead className="text-xs">Product</TableHead>
-              <TableHead className="text-xs">Category</TableHead>
-              <TableHead className="text-xs text-right">Quantity</TableHead>
-              <TableHead className="text-xs">Unit</TableHead>
-              <TableHead className="text-xs text-right">Unit Cost</TableHead>
-              <TableHead className="text-xs text-right">Total Value</TableHead>
-              <TableHead className="text-xs">Location</TableHead>
-              <TableHead className="text-xs w-10"></TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {isLoading ? (
-              [...Array(5)].map((_, i) => (
-                <TableRow key={i}>
-                  {[...Array(8)].map((_, j) => (
-                    <TableCell key={j}><Skeleton className="h-4 w-full" /></TableCell>
-                  ))}
-                </TableRow>
-              ))
-            ) : items.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
-                  No inventory items found. Add items to track your stock.
-                </TableCell>
-              </TableRow>
-            ) : (
-              items.map((item) => (
-                <TableRow key={item.id} className={cn("cursor-pointer", item.quantity <= (item.reorderLevel || 0) && "bg-destructive/5")}>
-                  <TableCell className="text-sm font-medium">{productTypeLabels[item.productType] || item.productType}</TableCell>
-                  <TableCell>
-                    <span className={cn("inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium", categoryColors[item.category])}>
-                      {item.category.replace('_', ' ')}
-                    </span>
-                  </TableCell>
-                  <TableCell className="text-sm text-right font-medium">{item.quantity.toLocaleString()}</TableCell>
-                  <TableCell className="text-sm">{item.unit}</TableCell>
-                  <TableCell className="text-sm text-right">{formatCurrency(item.unitCost)}</TableCell>
-                  <TableCell className="text-sm text-right font-medium">{formatCurrency(item.totalValue)}</TableCell>
-                  <TableCell className="text-sm text-muted-foreground">{item.warehouseLocation || "-"}</TableCell>
-                  <TableCell>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-8 w-8">
-                          <MoreHorizontal className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => openEditDialog(item)}>
-                          <Pencil className="h-4 w-4 mr-2" /> Edit
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => setDeletingId(item.id)} className="text-destructive">
-                          <Trash2 className="h-4 w-4 mr-2" /> Delete
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </TableCell>
-                </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
-      </div>
+      <Tabs defaultValue="products" className="space-y-6">
+        <TabsList>
+          <TabsTrigger value="products">Finished Products</TabsTrigger>
+          <TabsTrigger value="byproducts">Byproducts</TabsTrigger>
+          <TabsTrigger value="batches">Raw Batches (Coconuts)</TabsTrigger>
+        </TabsList>
 
-      {/* Create/Edit Dialog */}
-      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="max-w-lg">
+        <TabsContent value="products">
+          <div className="rounded-xl border border-border bg-card">
+            <Table>
+              <TableHeader>
+                <TableRow className="hover:bg-transparent">
+                  <TableHead className="text-xs">Product Type</TableHead>
+                  <TableHead className="text-xs text-right">Available Stock</TableHead>
+                  <TableHead className="text-xs text-right">Reserved</TableHead>
+                  <TableHead className="text-xs">Unit</TableHead>
+                  <TableHead className="text-xs text-right">Avg Cost</TableHead>
+                  <TableHead className="text-xs text-right">Total Value</TableHead>
+                  <TableHead className="text-xs">Last Updated</TableHead>
+                  <TableHead className="text-xs w-10"></TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {isLoading ? (
+                  [...Array(3)].map((_, i) => (
+                    <TableRow key={i}>{[...Array(8)].map((_, j) => <TableCell key={j}><Skeleton className="h-4 w-full" /></TableCell>)}</TableRow>
+                  ))
+                ) : filteredProducts.length === 0 ? (
+                  <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">No products found systematically. Production output will update this table.</TableCell></TableRow>
+                ) : (
+                  filteredProducts.map((p) => (
+                    <TableRow key={p.id}>
+                      <TableCell className="text-sm font-medium">{productTypeLabels[p.productType] || p.productType}</TableCell>
+                      <TableCell className="text-sm text-right font-medium">{p.availableStock.toLocaleString()}</TableCell>
+                      <TableCell className="text-sm text-right text-muted-foreground">{p.reservedStock.toLocaleString()}</TableCell>
+                      <TableCell className="text-sm">{p.unit}</TableCell>
+                      <TableCell className="text-sm text-right">{formatCurrency(p.averageCost)}</TableCell>
+                      <TableCell className="text-sm text-right font-medium text-success">{formatCurrency(p.totalValue)}</TableCell>
+                      <TableCell className="text-sm text-muted-foreground">{format(new Date(p.lastUpdated), 'yyyy-MM-dd')}</TableCell>
+                      <TableCell>
+                        <Button variant="ghost" size="sm" onClick={() => openAdjustDialog("product", p.id)}>
+                          Adjust
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="byproducts">
+          <div className="rounded-xl border border-border bg-card">
+            <Table>
+              <TableHeader>
+                <TableRow className="hover:bg-transparent">
+                  <TableHead className="text-xs">Byproduct</TableHead>
+                  <TableHead className="text-xs text-right">Total Stock</TableHead>
+                  <TableHead className="text-xs">Unit</TableHead>
+                  <TableHead className="text-xs text-right">Est. Avg Value</TableHead>
+                  <TableHead className="text-xs">Last Updated</TableHead>
+                  <TableHead className="text-xs w-10"></TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {isLoading ? (
+                  [...Array(2)].map((_, i) => (
+                    <TableRow key={i}>{[...Array(6)].map((_, j) => <TableCell key={j}><Skeleton className="h-4 w-full" /></TableCell>)}</TableRow>
+                  ))
+                ) : filteredByproducts.length === 0 ? (
+                  <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">No byproducts found systematically.</TableCell></TableRow>
+                ) : (
+                  filteredByproducts.map((b) => (
+                    <TableRow key={b.id}>
+                      <TableCell className="text-sm font-medium">{b.byproductConfig?.name || 'Unknown'}</TableCell>
+                      <TableCell className="text-sm text-right font-medium">{b.totalStock.toLocaleString()}</TableCell>
+                      <TableCell className="text-sm">{b.unit}</TableCell>
+                      <TableCell className="text-sm text-right">{formatCurrency(b.averageCost)}</TableCell>
+                      <TableCell className="text-sm text-muted-foreground">{format(new Date(b.lastUpdated), 'yyyy-MM-dd')}</TableCell>
+                      <TableCell>
+                        <Button variant="ghost" size="sm" onClick={() => openAdjustDialog("byproduct", b.id)}>
+                          Adjust
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="batches">
+           <div className="rounded-xl border border-border bg-card">
+            <Table>
+              <TableHeader>
+                <TableRow className="hover:bg-transparent">
+                  <TableHead className="text-xs">Batch Code</TableHead>
+                  <TableHead className="text-xs">Grade</TableHead>
+                  <TableHead className="text-xs text-right">Initial Stock</TableHead>
+                  <TableHead className="text-xs text-right">Current Stock</TableHead>
+                  <TableHead className="text-xs text-right">Processed / Sold</TableHead>
+                  <TableHead className="text-xs w-10"></TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {isLoading ? (
+                  [...Array(4)].map((_, i) => (
+                    <TableRow key={i}>{[...Array(6)].map((_, j) => <TableCell key={j}><Skeleton className="h-4 w-full" /></TableCell>)}</TableRow>
+                  ))
+                ) : filteredBatches.length === 0 ? (
+                  <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">No active batch inventory tracking found.</TableCell></TableRow>
+                ) : (
+                  filteredBatches.map((b) => (
+                    <TableRow key={b.id}>
+                      <TableCell className="font-mono text-sm">{b.batch?.batchCode || 'Unknown'}</TableCell>
+                      <TableCell className="text-sm">{b.grade}</TableCell>
+                      <TableCell className="text-sm text-right text-muted-foreground">{b.initialStock.toLocaleString()}</TableCell>
+                      <TableCell className="text-sm text-right font-bold">{b.currentStock.toLocaleString()}</TableCell>
+                      <TableCell className="text-sm text-right text-muted-foreground">{b.processedCount} / {b.soldCount}</TableCell>
+                      <TableCell>
+                        <Button variant="ghost" size="sm" onClick={() => openAdjustDialog("batch", b.id)}>
+                          Adjust
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        </TabsContent>
+      </Tabs>
+
+      {/* Adjust Dialog */}
+      <Dialog open={isAdjustOpen} onOpenChange={setIsAdjustOpen}>
+        <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>{editingItem ? 'Edit Inventory' : 'Add Inventory'}</DialogTitle>
+            <DialogTitle>Adjust Inventory</DialogTitle>
             <DialogDescription>
-              {editingItem ? 'Update inventory item details.' : 'Add a new inventory item.'}
+              Write off lost stock, record audit adjustments, or fix discrepancies manually.
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleSubmit(onSubmit)}>
-            <div className="grid gap-4 py-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="productType">Product Type *</Label>
-                  <Controller
-                    name="productType"
-                    control={control}
-                    render={({ field }) => (
-                      <Select onValueChange={field.onChange} value={field.value}>
-                        <SelectTrigger><SelectValue placeholder="Select product" /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="RAW_COCONUT">Raw Coconut</SelectItem>
-                          <SelectItem value="COCONUT_OIL">Coconut Oil</SelectItem>
-                          <SelectItem value="COPRA">Copra</SelectItem>
-                          <SelectItem value="COCONUT_MILK">Coconut Milk</SelectItem>
-                          <SelectItem value="DESICCATED_COCONUT">Desiccated Coconut</SelectItem>
-                          <SelectItem value="COIR">Coir</SelectItem>
-                          <SelectItem value="SHELL_CHARCOAL">Shell Charcoal</SelectItem>
-                          <SelectItem value="HUSK">Husk</SelectItem>
-                          <SelectItem value="SHELL">Shell</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    )}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="category">Category *</Label>
-                  <Controller
-                    name="category"
-                    control={control}
-                    render={({ field }) => (
-                      <Select onValueChange={field.onChange} value={field.value}>
-                        <SelectTrigger><SelectValue placeholder="Select category" /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="RAW_MATERIAL">Raw Material</SelectItem>
-                          <SelectItem value="FINISHED_PRODUCT">Finished Product</SelectItem>
-                          <SelectItem value="BYPRODUCT">Byproduct</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    )}
-                  />
-                </div>
-              </div>
-              <div className="grid grid-cols-3 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="quantity">Quantity *</Label>
-                  <Input type="number" {...register("quantity")} />
-                  {errors.quantity && <p className="text-sm text-destructive">{errors.quantity.message}</p>}
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="unit">Unit *</Label>
-                  <Input {...register("unit")} placeholder="kg, liters, pcs" />
-                  {errors.unit && <p className="text-sm text-destructive">{errors.unit.message}</p>}
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="unitCost">Unit Cost (₹) *</Label>
-                  <Input type="number" step="0.01" {...register("unitCost")} />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="reorderLevel">Reorder Level</Label>
-                  <Input type="number" {...register("reorderLevel")} />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="warehouseLocation">Location</Label>
-                  <Input {...register("warehouseLocation")} />
-                </div>
-              </div>
+             <div className="grid gap-4 py-4">
               <div className="space-y-2">
-                <Label htmlFor="notes">Notes</Label>
-                <Textarea {...register("notes")} />
+                <Label>Inventory Pool *</Label>
+                <Controller
+                  name="type"
+                  control={control}
+                  render={({ field }) => (
+                    <Select onValueChange={(val) => { field.onChange(val); reset({ ...watch(), type: val as any, itemId: "" }) }} value={field.value}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="product">Finished Product</SelectItem>
+                        <SelectItem value="byproduct">Byproduct</SelectItem>
+                        <SelectItem value="batch">Raw Batch</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  )}
+                />
               </div>
+
+              <div className="space-y-2">
+                <Label>Specific Item *</Label>
+                <Controller
+                  name="itemId"
+                  control={control}
+                  render={({ field }) => (
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <SelectTrigger><SelectValue placeholder="Select target item..." /></SelectTrigger>
+                      <SelectContent>
+                        {watchType === "product" && products.map(p => (
+                           <SelectItem key={p.id} value={p.id}>{productTypeLabels[p.productType] || p.productType} ({p.unit})</SelectItem>
+                        ))}
+                        {watchType === "byproduct" && byproducts.map(b => (
+                           <SelectItem key={b.id} value={b.id}>{b.byproductConfig?.name} ({b.unit})</SelectItem>
+                        ))}
+                        {watchType === "batch" && batches.map(b => (
+                           <SelectItem key={b.id} value={b.id}>{b.batch?.batchCode} - {b.grade}</SelectItem>
+                        ))}
+                        {(watchType === "product" ? products : watchType === "byproduct" ? byproducts : batches).length === 0 && (
+                          <SelectItem value="none" disabled>No items available to adjust</SelectItem>
+                        )}
+                      </SelectContent>
+                    </Select>
+                  )}
+                />
+                {errors.itemId && <p className="text-xs text-destructive">{errors.itemId.message}</p>}
+              </div>
+
+              <div className="space-y-2">
+                <Label>Adjustment (+/-) *</Label>
+                <Input type="number" step="0.01" {...register("adjustment")} placeholder="e.g. -5 to reduce, 10 to increase" />
+                {errors.adjustment && <p className="text-xs text-destructive">{errors.adjustment.message}</p>}
+                <p className="text-xs text-muted-foreground">Use negative values to deduct lost or expired stock.</p>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Reason *</Label>
+                <Input {...register("reason")} placeholder="e.g. Audited shortage" />
+                {errors.reason && <p className="text-xs text-destructive">{errors.reason.message}</p>}
+              </div>
+
+               <div className="space-y-2">
+                <Label>Reference Note / Document</Label>
+                <Textarea {...register("reference")} placeholder="Optional audit link or note..." />
+              </div>
+
             </div>
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
-              <Button type="submit" disabled={createMutation.isPending || updateMutation.isPending}>
-                {(createMutation.isPending || updateMutation.isPending) && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                {editingItem ? 'Update' : 'Create'}
+              <Button type="button" variant="outline" onClick={() => setIsAdjustOpen(false)}>Cancel</Button>
+              <Button type="submit" disabled={adjustMutation.isPending}>
+                {adjustMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                Confirm Adjustment
               </Button>
             </DialogFooter>
           </form>
         </DialogContent>
       </Dialog>
-
-      {/* Delete Confirmation */}
-      <AlertDialog open={!!deletingId} onOpenChange={() => setDeletingId(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete Inventory Item</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to delete this inventory item? This action cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-              {deleteMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   );
 };
